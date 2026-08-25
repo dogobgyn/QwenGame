@@ -262,92 +262,85 @@
         function animate() {
             time += 0.016;
             
-            // Clear canvas
-            ctx.fillStyle = `rgb(${bgColor}, ${bgColor}, ${bgColor})`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             
             // Pulse effect - one beat every 2 seconds (0.5 Hz)
             const pulse = Math.sin(time * Math.PI) * 0.15 + 1;
             
+            // Calculate heart scale based on game state
+            let currentHeartScale;
             if (gameState === 'intro') {
-                // Heart fades in and grows to target size
+                // Heart fades in and grows to target size (button size ~35px)
                 heartBaseScale = Math.min(heartBaseScale + 0.015, 1);
-                
                 // Background fades to white as heart grows
                 bgColor = Math.min(bgColor + 3, 255);
-                
-                // Draw heart FIRST (behind everything) with pulse - at full size when button appears
-                const currentScale = targetHeartSize * heartBaseScale * pulse;
-                drawHeart(centerX, centerY, currentScale, '#ff0000');
+                currentHeartScale = targetHeartSize * heartBaseScale * pulse;
                 
                 // Start title animation when heart is fully grown
-                if (heartBaseScale >= 1 && gameState === 'intro') {
+                if (heartBaseScale >= 1) {
                     gameState = 'title';
                 }
-            }
-            
-            if (gameState === 'title' || gameState === 'transitioning') {
+            } else if (gameState === 'title') {
                 // Background is white
                 bgColor = 255;
                 
-                const buttonCenterY = centerY + 100;
+                // Title comes down with staggered animation
+                const progress = Math.min(time * 0.5, 1);
+                const easeProgress = progress < 0 ? 0 : progress > 1 ? 1 : 
+                    progress < 0.5 ? 2 * progress * progress : 
+                    1 - Math.pow(-2 * progress + 2, 2) / 2;
                 
-                if (gameState === 'title') {
-                    // Title comes down with staggered animation
-                    const progress = Math.min(time * 0.5, 1);
-                    const easeProgress = progress < 0 ? 0 : progress > 1 ? 1 : 
-                        progress < 0.5 ? 2 * progress * progress : 
-                        1 - Math.pow(-2 * progress + 2, 2) / 2;
-                    
-                    titleY = -200 + (titleTargetY + 200) * easeProgress;
-                    
-                    // Button fades in after title appears
-                    buttonAlpha = Math.min(Math.max(0, (progress - 0.7) * 3), 1);
-                    
-                    // Check hover
-                    buttonHovered = isMouseOverButton(mouseX, mouseY);
+                titleY = -200 + (titleTargetY + 200) * easeProgress;
+                
+                // Button fades in after title appears
+                buttonAlpha = Math.min(Math.max(0, (progress - 0.7) * 3), 1);
+                
+                // Check hover
+                buttonHovered = isMouseOverButton(mouseX, mouseY);
+                
+                // Heart stays at target size, pulsing (matches button height)
+                currentHeartScale = targetHeartSize * pulse;
+            } else if (gameState === 'transitioning') {
+                // Background is white
+                bgColor = 255;
+                
+                // Title goes up
+                const transTime = time - transitionStartTime;
+                const progress = Math.min(transTime * 0.8, 1);
+                const easeProgress = progress < 0.5 ? 2 * progress * progress : 
+                    1 - Math.pow(-2 * progress + 2, 2) / 2;
+                
+                titleY = titleTargetY - (titleTargetY + 200) * easeProgress;
+                
+                // Heart shrinks from target size (~35px) to 2x2 grid size (~30px for 2 cells of 30px)
+                const shrinkProgress = Math.min(transTime * 0.5, 1);
+                const shrinkFactor = 1 - shrinkProgress * 0.15; // Shrink from 35 to ~30
+                currentHeartScale = targetHeartSize * pulse * shrinkFactor;
+                
+                // Grid fades in
+                gridOpacity = Math.min(gridOpacity + 0.02, 0.15);
+                
+                if (shrinkProgress >= 1) {
+                    gameState = 'playing';
                 }
-                
-                if (gameState === 'transitioning') {
-                    // Title goes up
-                    const transTime = time - transitionStartTime;
-                    const progress = Math.min(transTime * 0.8, 1);
-                    const easeProgress = progress < 0.5 ? 2 * progress * progress : 
-                        1 - Math.pow(-2 * progress + 2, 2) / 2;
-                    
-                    titleY = titleTargetY - (titleTargetY + 200) * easeProgress;
-                    
-                    // Heart shrinks to 2x2 grid size (from ~35px to ~30px which is 2 cells of 16x16 grid)
-                    const shrinkProgress = Math.min(transTime * 0.5, 1);
-                    heartFinalScale = 1 - shrinkProgress * 0.7;
-                    
-                    // Grid fades in
-                    gridOpacity = Math.min(gridOpacity + 0.02, 0.15);
-                    
-                    if (shrinkProgress >= 1) {
-                        gameState = 'playing';
-                    }
-                }
-                
-                // Draw heart FIRST (behind everything) at current size (pulsing) - matches button size when visible
-                let currentHeartScale;
-                if (gameState === 'transitioning') {
-                    // During transition, heart shrinks from button size to 2x2 grid size
-                    const transTime = time - transitionStartTime;
-                    const shrinkProgress = Math.min(transTime * 0.5, 1);
-                    const baseScale = targetHeartSize * (1 - shrinkProgress * 0.7);
-                    currentHeartScale = baseScale * pulse;
-                } else {
-                    // Heart matches button height (~35px)
-                    currentHeartScale = targetHeartSize * pulse;
-                }
-                
-                drawHeart(centerX, centerY, currentHeartScale, '#ff0000');
-                
-                // Draw title letters with individual animations (on top of heart)
+            } else if (gameState === 'playing') {
+                bgColor = 255;
+                // Heart stays at 2x2 grid size (~30px), pulsing
+                currentHeartScale = targetHeartSize * pulse * 0.85;
+            }
+            
+            // Clear canvas with background color
+            ctx.fillStyle = `rgb(${bgColor}, ${bgColor}, ${bgColor})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // DRAW ORDER: Heart first (back), then title, then button, then grid
+            
+            // 1. Draw heart (behind everything)
+            drawHeart(centerX, centerY, currentHeartScale, '#ff0000');
+            
+            // 2. Draw title letters (on top of heart)
+            if (gameState === 'title' || gameState === 'transitioning') {
                 const letterWidth = 50;
                 const totalWidth = titleText.length * letterWidth;
                 const startX = centerX - totalWidth / 2;
@@ -368,24 +361,18 @@
                     
                     drawLetter(char, letterX, letterY, 0.5, drift, letterPulse);
                 }
-                
-                // Draw start button on top
-                if (gameState === 'title') {
-                    const buttonScale = buttonHovered ? 1.1 : 1;
-                    const actualButtonY = centerY + 100;
-                    drawStartButton(centerX, actualButtonY, buttonScale * 0.8, buttonAlpha);
-                }
             }
             
+            // 3. Draw start button (on top of heart and title)
+            if (gameState === 'title') {
+                const buttonScale = buttonHovered ? 1.1 : 1;
+                drawStartButton(centerX, centerY + 100, buttonScale * 0.8, buttonAlpha);
+            }
+            
+            // 4. Draw grid (on top of everything in playing state)
             if (gameState === 'playing' || gameState === 'transitioning') {
-                // Draw grid
                 const cellSize = 30;
                 drawGrid(centerX, centerY, cellSize, gridOpacity);
-                
-                // Draw heart in center of grid - 2x2 size (60px = 2 cells)
-                const heartInGridScale = 30 * pulse; // 30px = 1 cell, so ~60px diameter for 2x2
-                
-                drawHeart(centerX, centerY, heartInGridScale, '#ff0000');
             }
             
             requestAnimationFrame(animate);
