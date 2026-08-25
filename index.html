@@ -40,16 +40,21 @@
         // Game state
         let gameState = 'intro'; // intro, title, playing
         let time = 0;
-        let heartScale = 0;
+        let heartBaseScale = 0;
         let bgColor = 0;
         let titleY = -200;
-        let titleTargetY = 80;
+        let titleTargetY = 60;
         let buttonAlpha = 0;
         let buttonHovered = false;
         let buttonPressed = false;
         let gridOpacity = 0;
         let heartFinalScale = 1;
-        let targetHeartSize = 40; // Target size for heart when fully grown (button size)
+        
+        // Button dimensions
+        const buttonWidth = 120;
+        const buttonHeight = 50;
+        const targetHeartSize = 35; // Heart matches button height when fully grown
+        let buttonY = 0;
 
         // Letter definitions (max 12 line segments per letter)
         const letters = {
@@ -57,7 +62,7 @@
             'R': [[0,0], [0,100], [0,0], [50,0], [50,40], [0,40], [35,60], [50,100]],
             'O': [[0,0], [0,100], [0,100], [50,100], [50,100], [50,0], [50,0], [0,0]],
             'T': [[25,0], [25,100], [0,0], [50,0]],
-            'E': [[0,0], [0,100], [0,0], [50,0], [0,50], [45,50], [0,100], [50,100]],
+            'E': [[50,0], [0,0], [0,100], [50,100], [0,0], [45,50], [0,100], [50,100]],
             'H': [[0,0], [0,100], [50,0], [50,100], [0,50], [50,50]],
             'C': [[50,0], [10,0], [0,50], [10,100], [50,100]],
             'A': [[25,0], [0,100], [15,100], [25,70], [35,100], [50,100]],
@@ -67,7 +72,7 @@
         };
 
         // Title text
-        const titleText = "PROTECT THE HEART";
+        const titleText = "PROTECTTHEHEART";
         const letterOffsets = [];
         
         // Initialize letter offsets for staggered animation
@@ -126,19 +131,25 @@
 
         // Draw the start button (vector graphics, no fonts)
         function drawStartButton(x, y, scale, alpha) {
+            buttonY = y;
             ctx.save();
             ctx.globalAlpha = alpha;
             ctx.translate(x, y);
             ctx.scale(scale, scale);
             
+            const halfWidth = 60;
+            const halfHeight = 25;
+            buttonWidth = 120 * scale;
+            buttonHeight = 50 * scale;
+            
             // Button border (rounded rectangle made of lines and curves)
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(-60, -25);
-            ctx.lineTo(60, -25);
-            ctx.lineTo(60, 25);
-            ctx.lineTo(-60, 25);
+            ctx.moveTo(-halfWidth, -halfHeight);
+            ctx.lineTo(halfWidth, -halfHeight);
+            ctx.lineTo(halfWidth, halfHeight);
+            ctx.lineTo(-halfWidth, halfHeight);
             ctx.closePath();
             ctx.stroke();
             
@@ -190,18 +201,18 @@
             ctx.restore();
         }
 
-        // Draw the 17x17 grid
+        // Draw the 16x16 grid
         function drawGrid(cx, cy, cellSize, opacity) {
             ctx.save();
             ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`;
             ctx.lineWidth = 2;
             
-            const gridSize = 17 * cellSize;
+            const gridSize = 16 * cellSize;
             const startX = cx - gridSize / 2;
             const startY = cy - gridSize / 2;
             
             // Vertical lines
-            for (let i = 0; i <= 17; i++) {
+            for (let i = 0; i <= 16; i++) {
                 ctx.beginPath();
                 ctx.moveTo(startX + i * cellSize, startY);
                 ctx.lineTo(startX + i * cellSize, startY + gridSize);
@@ -209,7 +220,7 @@
             }
             
             // Horizontal lines
-            for (let i = 0; i <= 17; i++) {
+            for (let i = 0; i <= 16; i++) {
                 ctx.beginPath();
                 ctx.moveTo(startX, startY + i * cellSize);
                 ctx.lineTo(startX + gridSize, startY + i * cellSize);
@@ -222,14 +233,14 @@
         // Check if mouse is over start button
         function isMouseOverButton(mouseX, mouseY) {
             const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2 + 150;
-            const buttonWidth = 140 * heartFinalScale;
-            const buttonHeight = 60 * heartFinalScale;
+            const centerY = canvas.height / 2 + 100; // Button is at centerY + 100
+            const baseHalfWidth = 60 * 0.8; // half of 120 * scale 0.8
+            const baseHalfHeight = 25 * 0.8; // half of 50 * scale 0.8
             
-            return mouseX >= centerX - buttonWidth / 2 &&
-                   mouseX <= centerX + buttonWidth / 2 &&
-                   mouseY >= centerY - buttonHeight / 2 &&
-                   mouseY <= centerY + buttonHeight / 2;
+            return mouseX >= centerX - baseHalfWidth &&
+                   mouseX <= centerX + baseHalfWidth &&
+                   mouseY >= centerY - baseHalfHeight &&
+                   mouseY <= centerY + baseHalfHeight;
         }
 
         // Mouse tracking
@@ -263,17 +274,17 @@
             
             if (gameState === 'intro') {
                 // Heart fades in and grows to target size
-                heartScale = Math.min(heartScale + 0.01, 1);
+                heartBaseScale = Math.min(heartBaseScale + 0.015, 1);
                 
                 // Background fades to white as heart grows
-                bgColor = Math.min(bgColor + 2, 255);
+                bgColor = Math.min(bgColor + 3, 255);
                 
-                // Draw heart with pulse
-                const currentScale = targetHeartSize * heartScale * pulse;
+                // Draw heart FIRST (behind everything) with pulse - at full size when button appears
+                const currentScale = targetHeartSize * heartBaseScale * pulse;
                 drawHeart(centerX, centerY, currentScale, '#ff0000');
                 
-                // Start title animation when heart is partially grown
-                if (heartScale > 0.3 && gameState === 'intro') {
+                // Start title animation when heart is fully grown
+                if (heartBaseScale >= 1 && gameState === 'intro') {
                     gameState = 'title';
                 }
             }
@@ -282,9 +293,11 @@
                 // Background is white
                 bgColor = 255;
                 
+                const buttonCenterY = centerY + 100;
+                
                 if (gameState === 'title') {
                     // Title comes down with staggered animation
-                    const progress = Math.min((time - 1) * 0.8, 1);
+                    const progress = Math.min(time * 0.5, 1);
                     const easeProgress = progress < 0 ? 0 : progress > 1 ? 1 : 
                         progress < 0.5 ? 2 * progress * progress : 
                         1 - Math.pow(-2 * progress + 2, 2) / 2;
@@ -292,7 +305,7 @@
                     titleY = -200 + (titleTargetY + 200) * easeProgress;
                     
                     // Button fades in after title appears
-                    buttonAlpha = Math.min(Math.max(0, (progress - 0.5) * 2), 1);
+                    buttonAlpha = Math.min(Math.max(0, (progress - 0.7) * 3), 1);
                     
                     // Check hover
                     buttonHovered = isMouseOverButton(mouseX, mouseY);
@@ -307,9 +320,9 @@
                     
                     titleY = titleTargetY - (titleTargetY + 200) * easeProgress;
                     
-                    // Heart shrinks to grid size
+                    // Heart shrinks to 2x2 grid size (from ~35px to ~30px which is 2 cells of 16x16 grid)
                     const shrinkProgress = Math.min(transTime * 0.5, 1);
-                    heartFinalScale = 1 - shrinkProgress * 0.92;
+                    heartFinalScale = 1 - shrinkProgress * 0.7;
                     
                     // Grid fades in
                     gridOpacity = Math.min(gridOpacity + 0.02, 0.15);
@@ -319,7 +332,22 @@
                     }
                 }
                 
-                // Draw title letters with individual animations
+                // Draw heart FIRST (behind everything) at current size (pulsing) - matches button size when visible
+                let currentHeartScale;
+                if (gameState === 'transitioning') {
+                    // During transition, heart shrinks from button size to 2x2 grid size
+                    const transTime = time - transitionStartTime;
+                    const shrinkProgress = Math.min(transTime * 0.5, 1);
+                    const baseScale = targetHeartSize * (1 - shrinkProgress * 0.7);
+                    currentHeartScale = baseScale * pulse;
+                } else {
+                    // Heart matches button height (~35px)
+                    currentHeartScale = targetHeartSize * pulse;
+                }
+                
+                drawHeart(centerX, centerY, currentHeartScale, '#ff0000');
+                
+                // Draw title letters with individual animations (on top of heart)
                 const letterWidth = 50;
                 const totalWidth = titleText.length * letterWidth;
                 const startX = centerX - totalWidth / 2;
@@ -341,20 +369,11 @@
                     drawLetter(char, letterX, letterY, 0.5, drift, letterPulse);
                 }
                 
-                // Draw heart at current size (pulsing)
-                let currentHeartScale;
-                if (gameState === 'transitioning') {
-                    currentHeartScale = (targetHeartSize * pulse) * (heartFinalScale + 0.08);
-                } else {
-                    currentHeartScale = targetHeartSize * pulse;
-                }
-                
-                drawHeart(centerX, centerY, currentHeartScale, '#ff0000');
-                
-                // Draw start button
+                // Draw start button on top
                 if (gameState === 'title') {
                     const buttonScale = buttonHovered ? 1.1 : 1;
-                    drawStartButton(centerX, centerY + 100, buttonScale * 0.8, buttonAlpha);
+                    const actualButtonY = centerY + 100;
+                    drawStartButton(centerX, actualButtonY, buttonScale * 0.8, buttonAlpha);
                 }
             }
             
@@ -363,8 +382,8 @@
                 const cellSize = 30;
                 drawGrid(centerX, centerY, cellSize, gridOpacity);
                 
-                // Draw heart in center of grid (position 8,8 on 17x17 grid)
-                const heartInGridScale = 25 * pulse * (heartFinalScale + 0.08);
+                // Draw heart in center of grid - 2x2 size (60px = 2 cells)
+                const heartInGridScale = 30 * pulse; // 30px = 1 cell, so ~60px diameter for 2x2
                 
                 drawHeart(centerX, centerY, heartInGridScale, '#ff0000');
             }
