@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protect the Heart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #000;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        let gameState = 'intro'; // intro, title, playing
+        let time = 0;
+        let heartScale = 0;
+        let bgColor = 0;
+        let titleY = -200;
+        let titleTargetY = 60;
+        let buttonAlpha = 0;
+        let buttonHovered = false;
+        let buttonPressed = false;
+        let gridOpacity = 0;
+        let heartFinalScale = 1;
+
+        // Letter definitions (max 12 line segments per letter)
+        const letters = {
+            'P': [[0,0], [0,100], [0,0], [60,0], [60,30], [30,50], [60,70], [60,100]],
+            'R': [[0,0], [0,100], [0,0], [60,0], [60,30], [30,50], [60,55], [60,100], [40,70]],
+            'O': [[0,50], [20,10], [60,10], [80,50], [80,100], [60,100], [20,100], [0,50]],
+            'T': [[40,0], [40,100], [0,0], [80,0]],
+            'E': [[0,0], [0,100], [0,0], [60,0], [0,50], [50,50], [0,100], [60,100]],
+            'H': [[0,0], [0,100], [0,50], [60,50], [60,0], [60,100]],
+            'C': [[60,10], [20,10], [0,50], [20,90], [60,90]],
+            'A': [[40,0], [0,100], [20,100], [40,60], [60,100], [80,100], [40,0]],
+            'L': [[0,0], [0,100], [60,100]],
+            'S': [[60,10], [20,10], [0,50], [20,90], [60,90], [80,50], [60,10]],
+            'I': [[40,0], [40,100], [20,0], [60,0], [20,100], [60,100]]
+        };
+
+        // Title text
+        const titleText = "PROTECT THE HEART";
+        const letterOffsets = [];
+        
+        // Initialize letter offsets for staggered animation
+        for (let i = 0; i < titleText.length; i++) {
+            letterOffsets.push({
+                delay: i * 0.1,
+                driftOffset: Math.random() * Math.PI * 2,
+                pulseOffset: Math.random() * Math.PI * 2
+            });
+        }
+
+        // Draw a heart shape using vector graphics
+        function drawHeart(cx, cy, scale, color) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+            
+            // Heart path using bezier curves (vector graphics)
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.bezierCurveTo(0, -25, -25, -25, -25, -10);
+            ctx.bezierCurveTo(-25, 5, 0, 20, 0, 35);
+            ctx.bezierCurveTo(0, 20, 25, 5, 25, -10);
+            ctx.bezierCurveTo(25, -25, 0, -25, 0, -10);
+            ctx.closePath();
+            
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Draw a letter using line segments
+        function drawLetter(letter, x, y, scale, drift, pulse) {
+            if (!letters[letter]) return;
+            
+            ctx.save();
+            ctx.translate(x + drift, y);
+            ctx.scale(1 + pulse * 0.1, 1 + pulse * 0.1);
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            const points = letters[letter];
+            ctx.beginPath();
+            
+            for (let i = 0; i < points.length - 1; i += 2) {
+                if (i === 0 || points[i] === 0 && points[i+1] === 0) {
+                    ctx.moveTo(points[i] * scale, points[i+1] * scale);
+                } else {
+                    ctx.lineTo(points[i] * scale, points[i+1] * scale);
+                }
+            }
+            
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Draw the start button (vector graphics, no fonts)
+        function drawStartButton(x, y, scale, alpha) {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            // Button border (rounded rectangle made of lines and curves)
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-60, -25);
+            ctx.lineTo(60, -25);
+            ctx.lineTo(60, 25);
+            ctx.lineTo(-60, 25);
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Draw "START" in vector letters (simplified)
+            const startLetters = [
+                { l: 'S', x: -45 },
+                { l: 'T', x: -25 },
+                { l: 'A', x: -5 },
+                { l: 'R', x: 15 },
+                { l: 'T', x: 40 }
+            ];
+            
+            startLetters.forEach(item => {
+                drawLetterSimple(item.l, item.x, 0, 0.3);
+            });
+            
+            ctx.restore();
+        }
+
+        // Simplified letter drawing for START button
+        function drawLetterSimple(letter, x, y, scale) {
+            const simpleLetters = {
+                'S': [[20,5], [5,5], [0,15], [5,25], [20,25], [25,15], [20,5]],
+                'T': [[12,0], [12,25], [0,0], [25,0]],
+                'A': [[12,0], [0,25], [8,25], [12,15], [16,25], [25,25], [12,0]],
+                'R': [[0,0], [0,25], [0,0], [18,0], [18,8], [8,13], [18,25], [12,18]]
+            };
+            
+            if (!simpleLetters[letter]) return;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            const points = simpleLetters[letter];
+            ctx.beginPath();
+            ctx.moveTo(points[0][0], points[0][1]);
+            
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i][0], points[i][1]);
+            }
+            
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Draw the 17x17 grid
+        function drawGrid(cx, cy, cellSize, opacity) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`;
+            ctx.lineWidth = 2;
+            
+            const gridSize = 17 * cellSize;
+            const startX = cx - gridSize / 2;
+            const startY = cy - gridSize / 2;
+            
+            // Vertical lines
+            for (let i = 0; i <= 17; i++) {
+                ctx.beginPath();
+                ctx.moveTo(startX + i * cellSize, startY);
+                ctx.lineTo(startX + i * cellSize, startY + gridSize);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let i = 0; i <= 17; i++) {
+                ctx.beginPath();
+                ctx.moveTo(startX, startY + i * cellSize);
+                ctx.lineTo(startX + gridSize, startY + i * cellSize);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+
+        // Check if mouse is over start button
+        function isMouseOverButton(mouseX, mouseY) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2 + 150;
+            const buttonWidth = 140 * heartFinalScale;
+            const buttonHeight = 60 * heartFinalScale;
+            
+            return mouseX >= centerX - buttonWidth / 2 &&
+                   mouseX <= centerX + buttonWidth / 2 &&
+                   mouseY >= centerY - buttonHeight / 2 &&
+                   mouseY <= centerY + buttonHeight / 2;
+        }
+
+        // Mouse tracking
+        let mouseX = 0, mouseY = 0;
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'title' && buttonAlpha > 0.5 && isMouseOverButton(mouseX, mouseY)) {
+                buttonPressed = true;
+                gameState = 'transitioning';
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            time += 0.016;
+            
+            // Clear canvas
+            ctx.fillStyle = `rgb(${bgColor}, ${bgColor}, ${bgColor})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            if (gameState === 'intro') {
+                // Heart fades in and grows
+                heartScale = Math.min(heartScale + 0.008, 1);
+                if (heartScale > 0.3) {
+                    bgColor = Math.min(bgColor + 0.5, 255);
+                }
+                
+                // Pulse effect
+                const pulse = Math.sin(time * 8) * 0.1 + 1;
+                const currentScale = heartScale * (100 + pulse * 20);
+                
+                drawHeart(centerX, centerY, currentScale, '#ff0000');
+                
+                // Transition to title state
+                if (heartScale >= 1) {
+                    gameState = 'title';
+                }
+            }
+            
+            if (gameState === 'title' || gameState === 'transitioning') {
+                // Background is white
+                bgColor = 255;
+                
+                // Pulse effect continues
+                const pulse = Math.sin(time * 8) * 0.1 + 1;
+                
+                if (gameState === 'title') {
+                    // Title comes down with staggered animation
+                    const progress = Math.min((time - 2) * 0.5, 1);
+                    const easeProgress = progress < 0 ? 0 : progress > 1 ? 1 : 
+                        progress < 0.5 ? 2 * progress * progress : 
+                        1 - Math.pow(-2 * progress + 2, 2) / 2;
+                    
+                    titleY = -200 + (titleTargetY + 200) * easeProgress;
+                    
+                    // Button fades in
+                    buttonAlpha = Math.min(buttonAlpha + 0.02, 1);
+                    
+                    // Check hover
+                    buttonHovered = isMouseOverButton(mouseX, mouseY);
+                }
+                
+                if (gameState === 'transitioning') {
+                    // Title goes up
+                    const progress = Math.min(time * 0.8, 1);
+                    const easeProgress = progress < 0.5 ? 2 * progress * progress : 
+                        1 - Math.pow(-2 * progress + 2, 2) / 2;
+                    
+                    titleY = titleTargetY - (titleTargetY + 200) * easeProgress;
+                    
+                    // Heart shrinks to grid size
+                    const shrinkProgress = Math.min((time) * 0.5, 1);
+                    heartFinalScale = 1 - shrinkProgress * 0.8;
+                    
+                    // Grid fades in
+                    gridOpacity = Math.min(gridOpacity + 0.03, 0.15);
+                    
+                    if (shrinkProgress >= 1) {
+                        gameState = 'playing';
+                    }
+                }
+                
+                // Draw title letters with individual animations
+                const letterWidth = 50;
+                const totalWidth = titleText.length * letterWidth;
+                const startX = centerX - totalWidth / 2;
+                
+                for (let i = 0; i < titleText.length; i++) {
+                    const char = titleText[i];
+                    if (char === ' ') continue;
+                    
+                    const offset = letterOffsets[i];
+                    const letterTime = time - offset.delay;
+                    
+                    // Individual letter drift and pulse
+                    const drift = Math.sin(letterTime * 2 + offset.driftOffset) * 3;
+                    const letterPulse = Math.sin(letterTime * 8 + offset.pulseOffset) * 0.05;
+                    
+                    const letterX = startX + i * letterWidth + letterWidth / 2;
+                    const letterY = titleY;
+                    
+                    drawLetter(char, letterX, letterY, 0.5, drift, letterPulse);
+                }
+                
+                // Draw heart (shrinking during transition)
+                const currentHeartScale = gameState === 'transitioning' ? 
+                    heartFinalScale * (30 + pulse * 5) : (100 + pulse * 20);
+                
+                const heartY = gameState === 'transitioning' ? 
+                    centerY - 150 + (150) * (1 - heartFinalScale) : centerY;
+                
+                drawHeart(centerX, heartY, currentHeartScale, '#ff0000');
+                
+                // Draw start button
+                if (gameState === 'title') {
+                    const buttonScale = buttonHovered ? 1.1 : 1;
+                    drawStartButton(centerX, centerY + 150, buttonScale * 0.8, buttonAlpha);
+                }
+            }
+            
+            if (gameState === 'playing' || gameState === 'transitioning') {
+                // Draw grid
+                const cellSize = 30;
+                drawGrid(centerX, centerY, cellSize, gridOpacity);
+                
+                // Draw heart in center of grid (position 8,8 on 17x17 grid)
+                const pulse = Math.sin(time * 8) * 0.1 + 1;
+                const heartInGridScale = 25 * pulse * heartFinalScale;
+                
+                drawHeart(centerX, centerY, heartInGridScale, '#ff0000');
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
