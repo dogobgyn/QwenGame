@@ -43,25 +43,26 @@
         let heartScale = 0;
         let bgColor = 0;
         let titleY = -200;
-        let titleTargetY = 60;
+        let titleTargetY = 80;
         let buttonAlpha = 0;
         let buttonHovered = false;
         let buttonPressed = false;
         let gridOpacity = 0;
         let heartFinalScale = 1;
+        let targetHeartSize = 40; // Target size for heart when fully grown (button size)
 
         // Letter definitions (max 12 line segments per letter)
         const letters = {
-            'P': [[0,0], [0,100], [0,0], [60,0], [60,30], [30,50], [60,70], [60,100]],
-            'R': [[0,0], [0,100], [0,0], [60,0], [60,30], [30,50], [60,55], [60,100], [40,70]],
+            'P': [[0,0], [0,100], [60,0], [60,30], [30,50], [60,70], [60,100]],
+            'R': [[0,0], [0,100], [60,0], [60,30], [30,50], [60,55], [60,100], [40,70]],
             'O': [[0,50], [20,10], [60,10], [80,50], [80,100], [60,100], [20,100], [0,50]],
             'T': [[40,0], [40,100], [0,0], [80,0]],
-            'E': [[0,0], [0,100], [0,0], [60,0], [0,50], [50,50], [0,100], [60,100]],
+            'E': [[0,0], [0,100], [60,0], [0,50], [50,50], [60,100]],
             'H': [[0,0], [0,100], [0,50], [60,50], [60,0], [60,100]],
             'C': [[60,10], [20,10], [0,50], [20,90], [60,90]],
-            'A': [[40,0], [0,100], [20,100], [40,60], [60,100], [80,100], [40,0]],
+            'A': [[40,0], [0,100], [20,100], [40,60], [60,100], [80,100]],
             'L': [[0,0], [0,100], [60,100]],
-            'S': [[60,10], [20,10], [0,50], [20,90], [60,90], [80,50], [60,10]],
+            'S': [[60,10], [20,10], [0,50], [20,90], [60,90], [80,50]],
             'I': [[40,0], [40,100], [20,0], [60,0], [20,100], [60,100]]
         };
 
@@ -104,7 +105,7 @@
             
             ctx.save();
             ctx.translate(x + drift, y);
-            ctx.scale(1 + pulse * 0.1, 1 + pulse * 0.1);
+            ctx.scale((1 + pulse * 0.1) * scale, (1 + pulse * 0.1) * scale);
             
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 3;
@@ -113,13 +114,10 @@
             
             const points = letters[letter];
             ctx.beginPath();
+            ctx.moveTo(points[0][0], points[0][1]);
             
-            for (let i = 0; i < points.length - 1; i += 2) {
-                if (i === 0 || points[i] === 0 && points[i+1] === 0) {
-                    ctx.moveTo(points[i] * scale, points[i+1] * scale);
-                } else {
-                    ctx.lineTo(points[i] * scale, points[i+1] * scale);
-                }
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i][0], points[i][1]);
             }
             
             ctx.stroke();
@@ -245,6 +243,7 @@
             if (gameState === 'title' && buttonAlpha > 0.5 && isMouseOverButton(mouseX, mouseY)) {
                 buttonPressed = true;
                 gameState = 'transitioning';
+                transitionStartTime = time;
             }
         });
 
@@ -259,21 +258,22 @@
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             
+            // Pulse effect - one beat every 2 seconds (0.5 Hz)
+            const pulse = Math.sin(time * Math.PI) * 0.15 + 1;
+            
             if (gameState === 'intro') {
-                // Heart fades in and grows
-                heartScale = Math.min(heartScale + 0.008, 1);
-                if (heartScale > 0.3) {
-                    bgColor = Math.min(bgColor + 0.5, 255);
-                }
+                // Heart fades in and grows to target size
+                heartScale = Math.min(heartScale + 0.015, 1);
                 
-                // Pulse effect
-                const pulse = Math.sin(time * 8) * 0.1 + 1;
-                const currentScale = heartScale * (100 + pulse * 20);
+                // Background fades to white as heart grows
+                bgColor = Math.min(bgColor + 1.5, 255);
                 
+                // Draw heart with pulse
+                const currentScale = targetHeartSize * heartScale * pulse;
                 drawHeart(centerX, centerY, currentScale, '#ff0000');
                 
-                // Transition to title state
-                if (heartScale >= 1) {
+                // Start title animation when heart is partially grown
+                if (heartScale > 0.3 && gameState === 'intro') {
                     gameState = 'title';
                 }
             }
@@ -282,20 +282,17 @@
                 // Background is white
                 bgColor = 255;
                 
-                // Pulse effect continues
-                const pulse = Math.sin(time * 8) * 0.1 + 1;
-                
                 if (gameState === 'title') {
                     // Title comes down with staggered animation
-                    const progress = Math.min((time - 2) * 0.5, 1);
+                    const progress = Math.min((time - 1) * 0.8, 1);
                     const easeProgress = progress < 0 ? 0 : progress > 1 ? 1 : 
                         progress < 0.5 ? 2 * progress * progress : 
                         1 - Math.pow(-2 * progress + 2, 2) / 2;
                     
                     titleY = -200 + (titleTargetY + 200) * easeProgress;
                     
-                    // Button fades in
-                    buttonAlpha = Math.min(buttonAlpha + 0.02, 1);
+                    // Button fades in after title appears
+                    buttonAlpha = Math.min(Math.max(0, (progress - 0.5) * 2), 1);
                     
                     // Check hover
                     buttonHovered = isMouseOverButton(mouseX, mouseY);
@@ -303,18 +300,19 @@
                 
                 if (gameState === 'transitioning') {
                     // Title goes up
-                    const progress = Math.min(time * 0.8, 1);
+                    const transTime = time - transitionStartTime;
+                    const progress = Math.min(transTime * 0.8, 1);
                     const easeProgress = progress < 0.5 ? 2 * progress * progress : 
                         1 - Math.pow(-2 * progress + 2, 2) / 2;
                     
                     titleY = titleTargetY - (titleTargetY + 200) * easeProgress;
                     
                     // Heart shrinks to grid size
-                    const shrinkProgress = Math.min((time) * 0.5, 1);
-                    heartFinalScale = 1 - shrinkProgress * 0.8;
+                    const shrinkProgress = Math.min(transTime * 0.5, 1);
+                    heartFinalScale = 1 - shrinkProgress * 0.92;
                     
                     // Grid fades in
-                    gridOpacity = Math.min(gridOpacity + 0.03, 0.15);
+                    gridOpacity = Math.min(gridOpacity + 0.02, 0.15);
                     
                     if (shrinkProgress >= 1) {
                         gameState = 'playing';
@@ -333,9 +331,9 @@
                     const offset = letterOffsets[i];
                     const letterTime = time - offset.delay;
                     
-                    // Individual letter drift and pulse
-                    const drift = Math.sin(letterTime * 2 + offset.driftOffset) * 3;
-                    const letterPulse = Math.sin(letterTime * 8 + offset.pulseOffset) * 0.05;
+                    // Individual letter drift and pulse (synced with heart)
+                    const drift = Math.sin(letterTime * Math.PI + offset.driftOffset) * 3;
+                    const letterPulse = Math.sin(letterTime * Math.PI + offset.pulseOffset) * 0.05;
                     
                     const letterX = startX + i * letterWidth + letterWidth / 2;
                     const letterY = titleY;
@@ -343,19 +341,20 @@
                     drawLetter(char, letterX, letterY, 0.5, drift, letterPulse);
                 }
                 
-                // Draw heart (shrinking during transition)
-                const currentHeartScale = gameState === 'transitioning' ? 
-                    heartFinalScale * (30 + pulse * 5) : (100 + pulse * 20);
+                // Draw heart at current size (pulsing)
+                let currentHeartScale;
+                if (gameState === 'transitioning') {
+                    currentHeartScale = (targetHeartSize * pulse) * (heartFinalScale + 0.08);
+                } else {
+                    currentHeartScale = targetHeartSize * pulse;
+                }
                 
-                const heartY = gameState === 'transitioning' ? 
-                    centerY - 150 + (150) * (1 - heartFinalScale) : centerY;
-                
-                drawHeart(centerX, heartY, currentHeartScale, '#ff0000');
+                drawHeart(centerX, centerY, currentHeartScale, '#ff0000');
                 
                 // Draw start button
                 if (gameState === 'title') {
                     const buttonScale = buttonHovered ? 1.1 : 1;
-                    drawStartButton(centerX, centerY + 150, buttonScale * 0.8, buttonAlpha);
+                    drawStartButton(centerX, centerY + 100, buttonScale * 0.8, buttonAlpha);
                 }
             }
             
@@ -365,14 +364,15 @@
                 drawGrid(centerX, centerY, cellSize, gridOpacity);
                 
                 // Draw heart in center of grid (position 8,8 on 17x17 grid)
-                const pulse = Math.sin(time * 8) * 0.1 + 1;
-                const heartInGridScale = 25 * pulse * heartFinalScale;
+                const heartInGridScale = 25 * pulse * (heartFinalScale + 0.08);
                 
                 drawHeart(centerX, centerY, heartInGridScale, '#ff0000');
             }
             
             requestAnimationFrame(animate);
         }
+        
+        let transitionStartTime = 0;
 
         // Start animation
         animate();
