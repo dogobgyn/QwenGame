@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>Protect the Heart</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000}
+  #scene{display:block;width:100%;height:100%;touch-action:manipulation;user-select:none}
+  #btn{cursor:pointer}
+  #btn:focus{outline:none}
+</style>
+</head>
+<body>
+<svg id="scene" xmlns="http://www.w3.org/2000/svg">
+  <rect id="bg" x="0" y="0" fill="#000"/>
+  <g id="grid" opacity="0" stroke="#ff2140" stroke-width="2"></g>
+  <g id="heartG" opacity="0">
+    <path id="halo" fill="#ff2140" transform="scale(1.16)"/>
+    <path id="heart" fill="#ff2140" stroke="#d40f33" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+  </g>
+  <g id="title" stroke="#000" stroke-width="2" stroke-linecap="round" fill="none"></g>
+  <g id="btn" opacity="0" tabindex="0" role="button" aria-label="start"></g>
+</svg>
+<script>
+"use strict";
+/* ================= helpers ================= */
+const NS='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const clamp01=x=>clamp(x,0,1);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeOutCubic=p=>1-Math.pow(1-p,3);
+const easeInCubic=p=>p*p*p;
+const easeInOutCubic=p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+
+/* ================= vector glyph set (line segments only, <=12 each) =================
+   Each letter lives in a 10 x 14 unit box, y down. */
+const LETTERS={
+  P:[[0,14,0,0],[0,0,7,0],[7,0,10,2.5],[10,2.5,10,4.5],[10,4.5,7,7],[7,7,0,7]],                                   // 6
+  R:[[0,14,0,0],[0,0,7,0],[7,0,10,2.5],[10,2.5,10,4.5],[10,4.5,7,7],[7,7,0,7],[6,7,10,14]],                      // 7
+  O:[[3,0,7,0],[7,0,10,3],[10,3,10,11],[10,11,7,14],[7,14,3,14],[3,14,0,11],[0,11,0,3],[0,3,3,0]],               // 8
+  T:[[0,0,10,0],[5,0,5,14]],                                                                                       // 2
+  E:[[0,0,0,14],[0,0,10,0],[0,7,8,7],[0,14,10,14]],                                                               // 4
+  C:[[10,3,7,0],[7,0,3,0],[3,0,0,3],[0,3,0,11],[0,11,3,14],[3,14,7,14],[7,14,10,11]],                            // 7
+  H:[[0,0,0,14],[10,0,10,14],[0,7,10,7]],                                                                          // 3
+  A:[[0,14,5,0],[5,0,10,14],[2.2,8.5,7.8,8.5]],                                                                   // 3
+  S:[[9.5,0,2.5,0],[2.5,0,0,2.5],[0,2.5,0,5],[0,5,2.5,7],[2.5,7,7.5,7],[7.5,7,10,9],[10,9,10,11.5],[10,11.5,7.5,14],[7.5,14,0.5,14]] // 9
+};
+const LW=10,LH=14,ADV=14,SPACE=9;
+function makeLetter(ch){
+  const g=document.createElementNS(NS,'g');
+  for(const s of LETTERS[ch]){
+    const l=document.createElementNS(NS,'line');
+    l.setAttribute('x1',s[0]);l.setAttribute('y1',s[1]);
+    l.setAttribute('x2',s[2]);l.setAttribute('y2',s[3]);
+    g.appendChild(l);
+  }
+  return g;
+}
+
+/* ================= heart path (vector, centered at origin) ================= */
+const HEART_D='M0 28C-4 24-10 19-16 13.5C-23 7-28 1-28-7C-28-18-20-26-11-26C-5.5-26-1.5-22.5 0-17.5C1.5-22.5 5.5-26 11-26C20-26 28-18 28-7C28 1 23 7 16 13.5C10 19 4 24 0 28Z';
+
+/* ================= dom refs ================= */
+const svg=$('scene'),bg=$('bg'),gridG=$('grid'),heartG=$('heartG'),
+      heartP=$('heart'),haloP=$('halo'),titleG=$('title'),btn=$('btn');
+heartP.setAttribute('d',HEART_D);
+haloP.setAttribute('d',HEART_D);
+
+/* ================= heartbeat ("lub-dub") ================= */
+const BEAT=0.9;               // seconds per beat
+const PULSE_AMP=0.075;        // heart scale amplitude
+function hb(t){
+  const p=(((t%BEAT)+BEAT)%BEAT)/BEAT;
+  const g=(c,w)=>Math.exp(-((p-c)*(p-c))/(2*w*w));
+  return g(0.10,0.05)+0.55*g(0.34,0.065);
+}
+
+/* ================= title letters (static metadata; geometry rebuilt on layout) ================= */
+const TITLE='PROTECT THE HEART';
+let TITLE_UNITS=0;
+for(const ch of TITLE)TITLE_UNITS+=ch===' '?SPACE:ADV;
+TITLE_UNITS-=4; // trailing gap
+const letterMeta=[];
+{let i=0;for(const ch of TITLE){
+  if(ch===' ')continue;
+  letterMeta.push({ch,i,
+    delay:2.1+i*0.055+((i*7)%5)*0.02,   // staggered start
+    dur:0.85+((i*13)%6)*0.05});         // slightly different rate per letter
+  i++;
+}}
+
+/* ================= layout state ================= */
+let W=0,H=0;
+const L={};
+let btnRect=null,btnText=null,btnHover=false,btnPress=false;
+
+function layout(){
+  W=innerWidth;H=innerHeight;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  bg.setAttribute('width',W);bg.setAttribute('height',H);
+
+  /* title */
+  L.lscale=clamp(Math.min(W*0.88/TITLE_UNITS,H*0.10),0.5,12);
+  const startX=(W-TITLE_UNITS*L.lscale)/2,top=H*0.06;
+  titleG.textContent='';
+  let cursor=0,idx=0;
+  for(const ch of TITLE){
+    if(ch===' '){cursor+=SPACE;continue;}
+    const m=letterMeta[idx++];
+    m.el=makeLetter(m.ch);
+    titleG.appendChild(m.el);
+    m.cx=startX+(cursor+5)*L.lscale;
+    m.cy=top+7*L.lscale;
+    m.yFrom=-(LH*L.lscale+40+(m.i%4)*26);
+    cursor+=ADV;
+  }
+
+  /* heart (title-screen pose) */
+  L.heartX=W/2; L.heartY=H*0.47;
+  L.heartSmall=Math.min(W,H)*0.06/56;
+  L.heartBig=Math.min(W,H)*0.40/56;
+
+  /* start button */
+  L.btnScale=clamp(L.lscale*0.55,1.1,3.2);
+  buildBtn();
+
+  /* 17x17 grid */
+  L.gridSide=Math.min(W,H)*0.86;
+  L.cell=L.gridSide/17;
+  L.gx0=(W-L.gridSide)/2; L.gy0=(H-L.gridSide)/2;
+  L.cellX=L.gx0+8.5*L.cell; L.cellY=L.gy0+8.5*L.cell;   // middle cell of 17x17
+  L.cellScale=L.cell*0.82/56;                            // heart fits in the cell
+  buildGrid();
+}
+
+function buildBtn(){
+  const bs=L.btnScale,bw=66*bs+44,bh=14*bs+26;
+  L.btnX=W/2;
+  L.btnY=(L.heartY+L.heartBig*28)+clamp(H*0.045,26,56)+bh/2;
+  btn.textContent='';
+  btnRect=document.createElementNS(NS,'rect');
+  btnRect.setAttribute('x',-bw/2);btnRect.setAttribute('y',-bh/2);
+  btnRect.setAttribute('width',bw);btnRect.setAttribute('height',bh);
+  btnRect.setAttribute('rx',12);
+  btnRect.setAttribute('stroke','#111');btnRect.setAttribute('stroke-width','2.5');
+  btn.appendChild(btnRect);
+  btnText=document.createElementNS(NS,'g');
+  btnText.setAttribute('stroke-width','2.2');btnText.setAttribute('stroke-linecap','round');
+  btnText.setAttribute('fill','none');
+  'START'.split('').forEach((ch,j)=>{
+    const g=makeLetter(ch);
+    g.setAttribute('transform',`translate(${(j*ADV+5-33)*bs} 0) scale(${bs}) translate(-5 -7)`);
+    btnText.appendChild(g);
+  });
+  btn.appendChild(btnText);
+  btn.style.display='';
+  setBtnStyle();
+}
+function setBtnStyle(){
+  if(!btnRect)return;
+  btnRect.setAttribute('fill',btnHover?'#111':'#fff');
+  btnText.setAttribute('stroke',btnHover?'#fff':'#111');
+}
+function buildGrid(){
+  gridG.textContent='';
+  for(let k=0;k<=17;k++){
+    const v=document.createElementNS(NS,'line');
+    v.setAttribute('x1',L.gx0+k*L.cell);v.setAttribute('y1',L.gy0);
+    v.setAttribute('x2',L.gx0+k*L.cell);v.setAttribute('y2',L.gy0+L.gridSide);
+    const h=document.createElementNS(NS,'line');
+    h.setAttribute('x1',L.gx0);h.setAttribute('y1',L.gy0+k*L.cell);
+    h.setAttribute('x2',L.gx0+L.gridSide);h.setAttribute('y2',L.gy0+k*L.cell);
+    gridG.appendChild(v);gridG.appendChild(h);
+  }
+}
+
+/* ================= interaction ================= */
+function startGame(){
+  if(phase!=='intro')return;
+  if(performance.now()/1000-t0<4.1)return;   // not visible yet
+  phase='exit';
+  tClick=performance.now()/1000-t0;
+  snap={hx:L.heartX,hy:L.heartY,s:L.heartBig};
+  letterMeta.forEach((m,idx)=>{
+    m.exitDelay=idx*0.028;
+    m.exitDur=0.5+((idx*13)%5)*0.04;
+    m.yTo=-(LH*L.lscale+60+m.i*10);
+  });
+}
+btn.addEventListener('click',startGame);
+btn.addEventListener('pointerenter',()=>{btnHover=true;setBtnStyle();});
+btn.addEventListener('pointerleave',()=>{btnHover=false;btnPress=false;setBtnStyle();});
+btn.addEventListener('pointerdown',()=>{btnPress=true;});
+btn.addEventListener('pointerup',()=>{btnPress=false;});
+btn.addEventListener('keydown',e=>{
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();startGame();}
+});
+addEventListener('resize',layout);
+
+/* ================= animation ================= */
+let phase='intro';                 // intro -> exit -> grid (gameplay plugs in here)
+let tClick=0,snap=null;
+const t0=performance.now()/1000;
+let lastLuma=-1;
+function setBg(l){l=Math.round(l);if(l!==lastLuma){lastLuma=l;bg.setAttribute('fill',`rgb(${l},${l},${l})`);}}
+
+function drawTitleIntro(t){
+  const amp=L.lscale*0.45;
+  for(const m of letterMeta){
+    const p=clamp01((t-m.delay)/m.dur);
+    const e=easeOutCubic(p);                       // ease INTO place
+    const y=lerp(m.yFrom,m.cy,e);
+    const dx=amp*Math.sin(t*0.9+m.i*1.7)*e;        // gentle drift
+    const dy=amp*0.6*Math.sin(t*0.6+m.i*0.9+2)*e;
+    const ps=1+0.055*hb(t-m.i*0.015);              // pulses with the heart
+    m.el.setAttribute('transform',`translate(${m.cx+dx} ${y+dy}) scale(${L.lscale*ps}) translate(-5 -7)`);
+  }
+}
+function drawTitleExit(t){
+  let gone=true;
+  for(const m of letterMeta){
+    const pe=clamp01((t-tClick-m.exitDelay)/m.exitDur);
+    if(pe<1)gone=false;
+    const y=lerp(m.cy,m.yTo,easeInCubic(pe));
+    m.el.setAttribute('opacity',String(clamp01(1-pe*pe*1.1)));
+    m.el.setAttribute('transform',`translate(${m.cx} ${y}) scale(${L.lscale}) translate(-5 -7)`);
+  }
+  return gone;
+}
+function drawBtnIntro(t,beat){
+  const bop=clamp01((t-4.1)/0.7);
+  const e=easeOutCubic(bop);
+  btn.setAttribute('opacity',bop);
+  const rise=(1-e)*16;
+  const ps=(btnPress?0.94:1)*(1+0.022*beat*bop);
+  btn.setAttribute('transform',`translate(${L.btnX} ${L.btnY+rise}) scale(${ps})`);
+}
+
+function frame(nowMs){
+  const t=nowMs/1000-t0;
+  const beat=hb(t);
+  let gOp=0,heartOp=0,hx=0,hy=0,hs=0;
+
+  if(phase==='intro'){
+    const gGrow=easeInOutCubic(clamp01((t-0.55)/3.75));   // heart grows 0.55s..4.3s
+    setBg(255*gGrow);                                     // black -> white as it grows
+    heartOp=clamp01((t-0.25)/1.0);                        // fade in
+    hx=L.heartX;hy=L.heartY;
+    hs=lerp(L.heartSmall,L.heartBig,gGrow)*(1+PULSE_AMP*beat);
+    drawTitleIntro(t);
+    drawBtnIntro(t,beat);
+  }else if(phase==='exit'){
+    setBg(255);
+    const qRaw=(t-tClick)/1.35;
+    const q=easeInOutCubic(clamp01(qRaw));
+    gOp=0.15*easeOutCubic(clamp01((t-tClick)/0.9));       // grid fades to 15% red
+    hx=lerp(snap.hx,L.cellX,q);
+    hy=lerp(snap.hy,L.cellY,q);
+    hs=lerp(snap.s,L.cellScale,q)*(1+PULSE_AMP*beat);     // keeps pulsing while shrinking
+    heartOp=1;
+    const gone=drawTitleExit(t);
+    const bop=clamp01(1-(t-tClick)/0.3);
+    btn.setAttribute('opacity',bop);
+    if(bop<=0)btn.style.display='none';
+    if(qRaw>=1&&gone){phase='grid';titleG.style.display='none';}
+  }else{ /* grid — awaiting gameplay */
+    setBg(255);
+    gOp=0.15;
+    hx=L.cellX;hy=L.cellY;
+    hs=L.cellScale*(1+PULSE_AMP*beat);                    // heart pulses in its cell
+    heartOp=1;
+  }
+
+  gridG.setAttribute('opacity',gOp);
+  heartG.setAttribute('opacity',heartOp);
+  heartG.setAttribute('transform',`translate(${hx} ${hy}) scale(${hs})`);
+  haloP.setAttribute('opacity',(0.10+0.09*beat).toFixed(3));
+  requestAnimationFrame(frame);
+}
+
+layout();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
