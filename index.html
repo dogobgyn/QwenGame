@@ -40,11 +40,12 @@
     <g id="tooltipG" opacity="0"></g>
     <g id="hoverG" opacity="0"><rect fill="none" stroke="#111" stroke-width="2"/></g>
     <g id="btn" opacity="0" tabindex="0" role="button" aria-label="start"></g>
-    <g id="goScreen" opacity="0">
-      <g id="goTitle" stroke="#ff2140" stroke-width="2.5" stroke-linecap="round" fill="none"></g>
-      <g id="goScore" stroke="#ff2140" stroke-width="2" stroke-linecap="round" fill="none"></g>
-      <g id="goBtn" opacity="0" tabindex="0" role="button" aria-label="title"></g>
-    </g>
+  </g>
+  <!-- Game over screen OUTSIDE world group so it renders above the fade rect -->
+  <g id="goScreen" opacity="0">
+    <g id="goTitle" stroke="#ff2140" stroke-width="2.5" stroke-linecap="round" fill="none"></g>
+    <g id="goScore" stroke="#ff2140" stroke-width="2" stroke-linecap="round" fill="none"></g>
+    <g id="goBtn" opacity="0" tabindex="0" role="button" aria-label="title"></g>
   </g>
   <rect id="fade" x="0" y="0" fill="#000" opacity="0" pointer-events="none"/>
 </svg>
@@ -171,31 +172,46 @@ function buildGridLines(){for(let k=0;k<=17;k++){el('line',{x1:GX0+k*CELL,y1:GY0
 let btnRect=null,btnText=null,btnHover=false,btnPress=false;const BTN_SCALE=clamp(TL*0.55,1.1,3.2);
 function buildBtn(){const bs=BTN_SCALE,bw=66*bs+44,bh=14*bs+26,bx=500,by=(HEART_TITLE.y+HEART_TITLE.big*28)+45+bh/2;btnRect=el('rect',{x:-bw/2,y:-bh/2,width:bw,height:bh,rx:12,stroke:'#111','stroke-width':2.5},btn);btnText=el('g',{'stroke-width':2.2,'stroke-linecap':'round',fill:'none'},btn);'START'.split('').forEach((ch,j)=>{const g=makeGlyph(ch);g.setAttribute('transform',`translate(${(j*ADV+5-33)*bs} 0) scale(${bs}) translate(-5 -7)`);btnText.appendChild(g);});btn._x=bx;btn._y=by;setBtnStyle();}
 function setBtnStyle(){if(!btnRect)return;btnRect.setAttribute('fill',btnHover?'#111':'#fff');btnText.setAttribute('stroke',btnHover?'#fff':'#111');}
-/* ======================== game over screen ======================== */
+/* ======================== game over screen (uses SCREEN SPACE, not design space) ======================== */
 let goLetters=[],goBtnRect=null,goBtnText=null,goBtnHover=false;
 let goPhase='hidden',goT=0;
 function buildGameOverScreen(){
-  goTitle.textContent='';goScore.textContent='';goBtn.textContent='';
-  const goStr='GAME OVER';const scale=TL*0.9;const sx=(D-textUnits(goStr)*scale)/2;const topY=D*0.3;
-  let cur=0,i=0;
-  for(const ch of goStr){if(ch===' '){cur+=SPACE;continue;}const gg=makeGlyph(ch);goTitle.appendChild(gg);goLetters.push({el:gg,cx:sx+(cur+5)*scale,cy:topY+7*scale,i,delay:i*0.06,dur:0.7});cur+=ADV;i++;}
-  /* TITLE button — red theme */
-  const bs=BTN_SCALE,bw=60*bs+44,bh=14*bs+26,bx=D/2,by=D*0.65;
-  goBtnRect=el('rect',{x:-bw/2,y:-bh/2,width:bw,height:bh,rx:12,stroke:'#ff2140','stroke-width':2.5,fill:'#1a0005'},goBtn);
-  goBtnText=el('g',{'stroke-width':2.2,'stroke-linecap':'round',fill:'none',stroke:'#ff2140'},goBtn);
-  'TITLE'.split('').forEach((ch,j)=>{const g=makeGlyph(ch);g.setAttribute('transform',`translate(${(j*ADV+5-30)*bs} 0) scale(${bs}) translate(-5 -7)`);goBtnText.appendChild(g);});
-  goBtn._x=bx;goBtn._y=by;
-  goBtn.addEventListener('pointerenter',()=>{goBtnHover=true;goBtnRect.setAttribute('fill','#ff2140');goBtnText.setAttribute('stroke','#000');});
-  goBtn.addEventListener('pointerleave',()=>{goBtnHover=false;goBtnRect.setAttribute('fill','#1a0005');goBtnText.setAttribute('stroke','#ff2140');});
-  goBtn.addEventListener('click',()=>{if(goPhase==='idle'){goPhase='fadeOut';goT=0;}});
-  goBtn.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(goPhase==='idle'){goPhase='fadeOut';goT=0;}}});
+  goTitle.textContent='';goScore.textContent='';goBtn.textContent='';goLetters=[];
+  /* Positions are in SCREEN pixels, recalculated on show */
 }
+/* Rebuild game over elements using current screen dimensions */
 function showGameOver(score){
   goScreen.setAttribute('opacity',1);
-  goScore.textContent='';
-  const stxt='FINAL SCORE '+score;const st=buildText(stxt,1.2,2,'#ff2140');
-  st.g.setAttribute('transform',`translate(${D/2-st.w/2} ${D*0.42})`);
+  goTitle.textContent='';goScore.textContent='';goBtn.textContent='';goLetters=[];
+  const sw=W,sh=H; // screen width/height in pixels
+  const titleScale=Math.min(sw,sh)*0.06;
+  const scoreScale=Math.min(sw,sh)*0.035;
+  const btnScale=Math.min(sw,sh)*0.03;
+  /* GAME OVER letters — centered horizontally, 30% down screen */
+  const goStr='GAME OVER';
+  const totalUnits=textUnits(goStr);
+  const totalPx=totalUnits*titleScale;
+  const startX=(sw-totalPx)/2;
+  const topY=sh*0.3;
+  let cur=0,i=0;
+  for(const ch of goStr){
+    if(ch===' '){cur+=SPACE;continue;}
+    const gg=makeGlyph(ch);goTitle.appendChild(gg);
+    goLetters.push({el:gg,cx:startX+(cur+5)*titleScale,cy:topY+7*titleScale,i,delay:i*0.06,dur:0.7,titleScale});
+    cur+=ADV;i++;
+  }
+  /* FINAL SCORE XXX */
+  const stxt='FINAL SCORE '+score;
+  const st=buildText(stxt,scoreScale,2,'#ff2140');
+  st.g.setAttribute('transform',`translate(${(sw-st.w)/2} ${sh*0.42})`);
   goScore.appendChild(st.g);goScore.setAttribute('opacity',1);
+  /* TITLE button */
+  const bbw=60*btnScale+44,bbh=14*btnScale+26;
+  const bbx=sw/2,bby=sh*0.6;
+  goBtnRect=el('rect',{x:bbx-bbw/2,y:bby-bbh/2,width:bbw,height:bbh,rx:12,stroke:'#ff2140','stroke-width':2.5,fill:'#1a0005'},goBtn);
+  goBtnText=el('g',{'stroke-width':2.2,'stroke-linecap':'round',fill:'none',stroke:'#ff2140'},goBtn);
+  'TITLE'.split('').forEach((ch,j)=>{const g=makeGlyph(ch);g.setAttribute('transform',`translate(${bbx+(j*ADV+5-30)*btnScale} ${bby}) scale(${btnScale}) translate(-5 -7)`);goBtnText.appendChild(g);});
+  goBtn._x=bbx;goBtn._y=bby;
   goPhase='fadeIn';goT=0;
 }
 function updateGameOver(dt){
@@ -204,27 +220,25 @@ function updateGameOver(dt){
   if(goPhase==='fadeIn'){
     for(const b of goLetters){
       const p=easeOutCubic(clamp01((goT-b.delay)/b.dur));
-      const y=lerp(b.cy-(LH*TL*0.9+60),b.cy,p);
-      b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${TL*0.9}) translate(-5 -7)`);
+      const y=lerp(b.cy-(LH*b.titleScale+60),b.cy,p);
+      b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${b.titleScale}) translate(-5 -7)`);
       b.el.setAttribute('opacity',clamp01(p*2));
     }
     const btnOp=clamp01((goT-1.0)/0.5);
     goBtn.setAttribute('opacity',btnOp);
-    goBtn.setAttribute('transform',`translate(${goBtn._x} ${goBtn._y})`);
     if(goT>1.8)goPhase='idle';
   }else if(goPhase==='idle'){
     goBtn.setAttribute('opacity',1);
   }else if(goPhase==='fadeOut'){
     for(const b of goLetters){
       const pe=easeInCubic(clamp01((goT-b.delay*0.5)/0.5));
-      const y=lerp(b.cy,b.cy-(LH*TL*0.9+80),pe);
-      b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${TL*0.9}) translate(-5 -7)`);
+      const y=lerp(b.cy,b.cy-(LH*b.titleScale+80),pe);
+      b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${b.titleScale}) translate(-5 -7)`);
       b.el.setAttribute('opacity',clamp01(1-pe));
     }
     const btnOp=clamp01(1-goT/0.4);
     goBtn.setAttribute('opacity',btnOp);
-    const scoreOp=clamp01(1-goT/0.6);
-    goScore.setAttribute('opacity',scoreOp);
+    goScore.setAttribute('opacity',clamp01(1-goT/0.6));
     if(goT>1.0){
       goPhase='hidden';goScreen.setAttribute('opacity',0);
       fullRestart();
@@ -311,78 +325,10 @@ function startPlacement(){phase='place';G.round=0;G.pause=0;selection=null;showI
 function endPlacement(){hideInstructions();phase='preAttack';G.timer=0.8;}
 function updatePlacement(dt){if(G.failT>0)G.failT-=dt;if(instr.state==='in'){instr.t+=dt;const p=easeOutCubic(clamp01(instr.t/0.8));instr.el.setAttribute('transform',`translate(${lerp(-instr.w-30,16,p)} ${INSTR_Y})`);if(p>=1)instr.state='idle';}else if(instr.state==='out'){instr.t+=dt;const p=easeInCubic(clamp01(instr.t/0.5));instr.el.setAttribute('transform',`translate(${lerp(16,-instr.w-30,p)} ${INSTR_Y})`);instrG.setAttribute('opacity',1-p);if(p>=1){instr.state='gone';instrG.style.display='none';}}if(choicesG._op!==undefined&&choicesG._op<1&&!G.choicesFading){choicesG._op=Math.min(1,choicesG._op+dt/0.35);choicesG.setAttribute('opacity',choicesG._op);}if(G.choicesFading){choicesG._op-=dt/0.3;choicesG.setAttribute('opacity',Math.max(0,choicesG._op));if(choicesG._op<=0){choicesG.style.display='none';G.choicesFading=false;}}if(G.pause>0){G.pause-=dt;if(G.pause<=0){if(G.round<CFG.PLACEMENTS)newChoices();else endPlacement();}}if(G.awaitChoice){let hov=-1;for(let i=0;i<G.choices.length;i++){const c=G.choices[i];if(mouse.x>=c.x0&&mouse.x<=c.x1&&Math.abs(mouse.y-CHOICE.y)<=c.half)hov=i;}G.choices.forEach((c,i)=>{if(c.hover!==(i===hov)){c.hover=i===hov;c.el.setAttribute('transform',`translate(${c.slotX} ${CHOICE.y-(c.hover?5:0)})`);c.el.firstChild.setAttribute('stroke',c.hover?'#111':'#ddd');}});svg.style.cursor=hov>=0?'pointer':'default';}else if(G.piece){drawGhost();svg.style.cursor=G.valid?'pointer':'default';}}
 /* ======================== attack ======================== */
-function pickEdgeCells(n){
-  const opts=[];
-  for(let i=0;i<17;i++){opts.push({x:i,y:0},{x:i,y:16},{x:0,y:i},{x:16,y:i});}
-  const out=[];
-  while(out.length<n&&opts.length){
-    const idx=(Math.random()*opts.length)|0;
-    const c=opts.splice(idx,1)[0];
-    /* Ensure minimum distance between portals */
-    if(!out.some(o=>Math.abs(o.x-c.x)+Math.abs(o.y-c.y)<4))out.push(c);
-  }
-  return out;
-}
-/* New portal system: wave N = N portals, staggered 5s apart, fixed aliens per portal */
-function startAttack(){
-  phase='attack';svg.style.cursor='default';attackElapsed=0;
-  G.spawned=0;G.gates=[];G.speedMult=1;
-  for(const s of turrets)s.cool=CFG.TURRET_RATE;
-  const numPortals=G.wave;
-  const cells=pickEdgeCells(numPortals);
-  /* Create all portals but only activate them at staggered times */
-  for(let p=0;p<numPortals;p++){
-    const openTime=0.9+p*CFG.PORTAL_STAGGER;
-    G.gates.push({
-      cell:cells[p%cells.length],
-      el:makeGateArt(),
-      openTime,
-      opened:false,
-      spawnQueue:[],
-      closing:false,closeT:0
-    });
-  }
-  /* Pre-fill each portal's spawn queue with fixed count, evenly spaced */
-  for(const gt of G.gates){
-    for(let k=0;k<CFG.ALIENS_PER_PORTAL;k++){
-      gt.spawnQueue.push(gt.openTime+k*CFG.SPAWN_GAP_BASE);
-    }
-  }
-  G.total=numPortals*CFG.ALIENS_PER_PORTAL;
-  if(G.wave===1)showTutorialToast(['CLICK TURRETS TO AIM','CLICK HEART TO HEARTSHOT']);
-}
+function pickEdgeCells(n){const opts=[];for(let i=0;i<17;i++){opts.push({x:i,y:0},{x:i,y:16},{x:0,y:i},{x:16,y:i});}const out=[];while(out.length<n&&opts.length){const idx=(Math.random()*opts.length)|0;const c=opts.splice(idx,1)[0];if(!out.some(o=>Math.abs(o.x-c.x)+Math.abs(o.y-c.y)<4))out.push(c);}return out;}
+function startAttack(){phase='attack';svg.style.cursor='default';attackElapsed=0;G.spawned=0;G.gates=[];G.speedMult=1;for(const s of turrets)s.cool=CFG.TURRET_RATE;const numPortals=G.wave;const cells=pickEdgeCells(numPortals);for(let p=0;p<numPortals;p++){const openTime=0.9+p*CFG.PORTAL_STAGGER;G.gates.push({cell:cells[p%cells.length],el:makeGateArt(),openTime,opened:false,spawnQueue:[],closing:false,closeT:0});}for(const gt of G.gates){for(let k=0;k<CFG.ALIENS_PER_PORTAL;k++){gt.spawnQueue.push(gt.openTime+k*CFG.SPAWN_GAP_BASE);}}G.total=numPortals*CFG.ALIENS_PER_PORTAL;if(G.wave===1)showTutorialToast(['CLICK TURRETS TO AIM','CLICK HEART TO HEARTSHOT']);}
 function makeGateArt(){const g=document.createElementNS(NS,'g');const sq=(r,sw)=>{const h=r/Math.SQRT2;return el('rect',{x:-h,y:-h,width:2*h,height:2*h,fill:'none',stroke:'#a45cff','stroke-width':sw},g);};sq(0.44,0.05);sq(0.3,0.04);gateG.appendChild(g);return g;}
-function updateGates(dt,t){
-  /* t is relative to attack start via attackElapsed */
-  const at=attackElapsed;
-  for(let gi=G.gates.length-1;gi>=0;gi--){
-    const gt=G.gates[gi];
-    /* Open portal visually when its time arrives */
-    if(!gt.opened&&at>=gt.openTime){gt.opened=true;}
-    /* Spawn aliens from queue */
-    while(gt.spawnQueue.length&&at>=gt.spawnQueue[0]){
-      gt.spawnQueue.shift();spawnAlien(gt.cell);G.spawned++;
-    }
-    /* Close after all spawned */
-    if(gt.opened&&!gt.spawnQueue.length&&!gt.closing&&G.spawned>=gt.spawnQueue.length){
-      /* Check if THIS gate is done (no more spawns queued) */
-      gt.closing=true;
-    }
-    /* Visual: scale in/out */
-    let s=0;
-    if(gt.opened){
-      const age=at-gt.openTime;
-      if(gt.closing){gt.closeT+=dt;s=1-easeInCubic(clamp01(gt.closeT/0.4));}
-      else{s=easeOutCubic(clamp01(age/0.5));}
-    }
-    const px=cellX(gt.cell.x)+CELL/2,py=cellY(gt.cell.y)+CELL/2,sc=CELL*s;
-    gt.el.setAttribute('transform',`translate(${px} ${py})`);
-    gt.el.setAttribute('opacity',clamp01(s*1.2));
-    if(gt.el.children[0])gt.el.children[0].setAttribute('transform',`rotate(${t*90}) scale(${sc})`);
-    if(gt.el.children[1])gt.el.children[1].setAttribute('transform',`rotate(${-t*140}) scale(${sc})`);
-    if(gt.closing&&gt.closeT>=0.45){gt.el.remove();G.gates.splice(gi,1);}
-  }
-}
+function updateGates(dt,t){const at=attackElapsed;for(let gi=G.gates.length-1;gi>=0;gi--){const gt=G.gates[gi];if(!gt.opened&&at>=gt.openTime){gt.opened=true;}while(gt.spawnQueue.length&&at>=gt.spawnQueue[0]){gt.spawnQueue.shift();spawnAlien(gt.cell);G.spawned++;}if(gt.opened&&!gt.spawnQueue.length&&!gt.closing){gt.closing=true;}let s=0;if(gt.opened){const age=at-gt.openTime;if(gt.closing){gt.closeT+=dt;s=1-easeInCubic(clamp01(gt.closeT/0.4));}else{s=easeOutCubic(clamp01(age/0.5));}}const px=cellX(gt.cell.x)+CELL/2,py=cellY(gt.cell.y)+CELL/2,sc=CELL*s;gt.el.setAttribute('transform',`translate(${px} ${py})`);gt.el.setAttribute('opacity',clamp01(s*1.2));if(gt.el.children[0])gt.el.children[0].setAttribute('transform',`rotate(${t*90}) scale(${sc})`);if(gt.el.children[1])gt.el.children[1].setAttribute('transform',`rotate(${-t*140}) scale(${sc})`);if(gt.closing&&gt.closeT>=0.45){gt.el.remove();G.gates.splice(gi,1);}}}
 function makeAlienArt(){const g=document.createElementNS(NS,'g');const body=el('circle',{r:0.30,fill:'#39d353',stroke:'#1f8f3a','stroke-width':0.05},g);const legs=el('g',{stroke:'#1f8f3a','stroke-width':0.05,'stroke-linecap':'round'},g);for(let i=-1;i<=1;i++)el('line',{x1:i*0.18,y1:0.2,x2:i*0.24,y2:0.36},legs);el('circle',{cx:-0.11,cy:-0.06,r:0.085,fill:'#fff'},g);el('circle',{cx:0.11,cy:-0.06,r:0.085,fill:'#fff'},g);const pup=el('g',{},g);el('circle',{cx:-0.11,cy:-0.06,r:0.038,fill:'#111'},pup);el('circle',{cx:0.11,cy:-0.06,r:0.038,fill:'#111'},pup);el('line',{x1:0,y1:-0.28,x2:0,y2:-0.42,stroke:'#1f8f3a','stroke-width':0.045},g);el('circle',{cy:-0.45,r:0.05,fill:'#a45cff'},g);alienG.appendChild(g);return{g,body,legs,pup};}
 function spawnAlien(cell){aliens.push({x:cell.x+0.5,y:cell.y+0.5,cell:{...cell},state:'spawn',t:0,aliveTime:0,speed:CFG.ALIEN_SPEED*(0.92+Math.random()*0.16),art:makeAlienArt(),walkT:Math.random()*6,from:null,to:null,mt:0,target:null,flash:0,wait:0,lunge:0,path:null,pathIdx:0,distTraveled:0,breach:false,hp:CFG.NORMAL_HP});}
 function astar(start){const key=n=>n.x+','+n.y;const goal=n=>manh(n)===1;if(goal(start))return[start];const open=[{x:start.x,y:start.y,g:0,f:manh(start)}];const gS={},from={},closed={};gS[key(start)]=0;while(open.length){let bi=0;for(let i=1;i<open.length;i++)if(open[i].f<open[bi].f)bi=i;const cur=open.splice(bi,1)[0],ck=key(cur);if(closed[ck])continue;closed[ck]=1;if(goal(cur)){const path=[];let k=ck;while(k){const[px,py]=k.split(',').map(Number);path.unshift({x:px,y:py});k=from[k];}return path;}for(const n of neighborCells(cur)){if(!inGrid(n)||structAt(n)||(n.x===HEART.x&&n.y===HEART.y))continue;const nk=key(n);if(closed[nk])continue;const ng=cur.g+1;if(gS[nk]===undefined||ng<gS[nk]){gS[nk]=ng;from[nk]=ck;open.push({x:n.x,y:n.y,g:ng,f:ng+manh(n)});}}}return null;}
@@ -392,7 +338,6 @@ function decide(a){if(manh(a.cell)===1){a.state='attack';a.target={kind:'heart'}
 function startStep(a,c){a.state='walk';a.from={...a.cell};a.to=c;a.mt=0;}
 function damageAlien(a,amt){if(a.state==='dying')return;a.hp-=amt;a.flash=0.15;if(a.hp<=0)killAlien(a);}
 function updateAliens(dt,t){for(let i=aliens.length-1;i>=0;i--){const a=aliens[i];a.aliveTime+=dt;a.walkT+=dt*7;if(a.flash>0)a.flash-=dt*4;a.art.body.setAttribute('fill',a.breach?'#e63946':'#39d353');a.art.body.setAttribute('stroke',a.breach?'#8b0000':'#1f8f3a');const indivMult=1+a.aliveTime*CFG.ALIEN_ACCEL;if(a.state==='spawn'){a.t+=dt;if(a.t>=0.4){a.state='idle';decide(a);}}else if(a.state==='walk'){a.mt+=dt*a.speed*indivMult*(a.breach?CFG.BREACH_SPEED_MULT:1);if(a.mt>=1){a.cell={...a.to};a.distTraveled+=1;a.from=null;a.to=null;a.state='idle';if(!a.breach&&a.path&&a.pathIdx<a.path.length)a.pathIdx++;if(a.breach)a.path=null;decide(a);}}else if(a.state==='idle'){if(a.wait>0){a.wait-=dt;if(a.wait<=0)decide(a);}}else if(a.state==='attack'){a.lunge+=dt*9;if(a.target.kind==='heart'){heartHp-=CFG.GNAW_DMG*dt;heartShake=0.15;if(heartHp<=0&&!heartDead){heartHp=0;heartDead=true;phase='over';overT=0;hideTooltip();startHeartBreak();}}else{const s=structAt(a.target.cell);if(!s){a.target=null;a.state='idle';a.path=null;a.wait=0.05;decide(a);}else damageStruct(s,CFG.GNAW_DMG*dt);}}else if(a.state==='dying'){a.t+=dt;if(a.t>=0.4){a.art.g.remove();aliens.splice(i,1);continue;}}let px=a.x,py=a.y;if(a.state==='walk'&&a.from){px=lerp(a.from.x+0.5,a.to.x+0.5,a.mt);py=lerp(a.from.y+0.5,a.to.y+0.5,a.mt);a.x=px;a.y=py;}const dxh=HEART.x+0.5-a.x,dyh=HEART.y+0.5-a.y,dh=Math.hypot(dxh,dyh)||1;let ox=0,oy=0;if(a.state==='attack'){const k=Math.max(0,Math.sin(a.lunge))*0.08;ox=dxh/dh*k*CELL;oy=dyh/dh*k*CELL;}const sc=a.state==='spawn'?easeOutCubic(a.t/0.4):a.state==='dying'?1-easeInCubic(a.t/0.4):1;a.art.g.setAttribute('transform',`translate(${cellX(px)+ox} ${cellY(py)+oy}) scale(${CELL*sc}) translate(0 ${a.state==='walk'?Math.sin(a.walkT)*0.03:0})`);a.art.pup.setAttribute('transform',`translate(${dxh/dh*0.03} ${dyh/dh*0.03})`);a.art.legs.setAttribute('transform',`rotate(${Math.sin(a.walkT)*8})`);a.art.g.setAttribute('opacity',a.flash>0?0.55:1);}}
-/* Explosion now damages ALL structures (walls AND turrets) */
 function killAlien(a){if(a.state==='dying')return;a.state='dying';a.t=0;aliensKilled++;burst(cellX(a.x),cellY(a.y),'#39d353',1.3);shockRing(cellX(a.x),cellY(a.y),1.6*CELL,'#ff8c42',0.35);heartshots=Math.min(CFG.HEARTSHOT_MAX,heartshots+CFG.HEARTSHOT_GAIN);drawHeartshotsHUD();const cx=Math.round(a.x-0.5),cy=Math.round(a.y-0.5);for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){if(!dx&&!dy)continue;const c={x:cx+dx,y:cy+dy};if(!inGrid(c))continue;const s=grid[c.y][c.x];if(s)damageStruct(s,CFG.EXPLODE_DMG);}}
 function updateTurrets(dt){const mx=(mouse.x-GX0)/CELL,my=(mouse.y-GY0)/CELL;for(const s of turrets){s.cool-=dt;if(selection&&selection.kind==='turret'&&selection.ref===s){const want=Math.atan2(my-(s.r+0.5),mx-(s.c+0.5));s.angle=angNorm(s.angle+clamp(angNorm(want-s.angle),-6*dt,6*dt));s.barrel.setAttribute('transform',`rotate(${s.angle*180/Math.PI})`);}if(phase==='attack'&&s.cool<=0){s.cool+=CFG.TURRET_RATE;const cx=s.c+0.5,cy=s.r+0.5,dx=Math.cos(s.angle),dy=Math.sin(s.angle);bullets.push({x:cx+dx*0.42,y:cy+dy*0.42,dx,dy,dist:0,el:el('circle',{r:0.09*CELL,fill:'#111'},bulletG)});}}}
 function updateBullets(dt){for(let i=bullets.length-1;i>=0;i--){const b=bullets[i];const step=CFG.BULLET_SPEED*dt;b.x+=b.dx*step;b.y+=b.dy*step;b.dist+=step;let dead=b.dist>=CFG.BULLET_RANGE;if(!dead){for(const a of aliens){if(a.state==='dying')continue;if(Math.hypot(a.x-b.x,a.y-b.y)<0.32){damageAlien(a,1);dead=true;break;}}}if(dead){b.el.remove();bullets.splice(i,1);continue;}b.el.setAttribute('cx',cellX(b.x));b.el.setAttribute('cy',cellY(b.y));}}
@@ -446,6 +391,11 @@ btn.addEventListener('pointerenter',()=>{btnHover=true;setBtnStyle();});
 btn.addEventListener('pointerleave',()=>{btnHover=false;btnPress=false;setBtnStyle();});
 btn.addEventListener('pointerdown',()=>{btnPress=true;});btn.addEventListener('pointerup',()=>{btnPress=false;});
 btn.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();btn.click();}});
+/* Game over button click handler — attached once, works because goBtn persists */
+goBtn.addEventListener('click',()=>{if(goPhase==='idle'){goPhase='fadeOut';goT=0;}});
+goBtn.addEventListener('pointerenter',()=>{goBtnHover=true;if(goBtnRect){goBtnRect.setAttribute('fill','#ff2140');}if(goBtnText){goBtnText.setAttribute('stroke','#000');}});
+goBtn.addEventListener('pointerleave',()=>{goBtnHover=false;if(goBtnRect){goBtnRect.setAttribute('fill','#1a0005');}if(goBtnText){goBtnText.setAttribute('stroke','#ff2140');}});
+goBtn.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(goPhase==='idle'){goPhase='fadeOut';goT=0;}}});
 addEventListener('resize',fitViewport);
 /* ======================== main loop ======================== */
 let lastLuma=-1;
