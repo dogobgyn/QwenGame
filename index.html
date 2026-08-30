@@ -1051,28 +1051,11 @@ function newChoices(){
     G.choices.push({el:card,x0:slotX-slotW/2,x1:slotX+slotW/2,half:slotW/2,cells:[[0,0]],types:['TURRET'],turretTypes:[turretType],hover:false,slotX});
   }
 
-  const tri=makeTriominoPiece();
-  {
-    const card=el('g',{},choicesG);
-    el('rect',{x:-slotW/2,y:-slotW/2,width:slotW,height:slotW,rx:10,fill:'#fff',stroke:'#ddd','stroke-width':1.5},card);
-    const content=el('g',{},card);
-    const slotX=x0+(slotW+gap)+slotW/2;
-    card.setAttribute('transform',`translate(${slotX} ${CHOICE.y})`);
-    const obj={
-      el:card,x0:slotX-slotW/2,x1:slotX+slotW/2,half:slotW/2,
-      cells:tri.cells.map(cc=>[...cc]),baseCells:tri.cells.map(cc=>[...cc]),
-      types:tri.types.slice(),baseTypes:tri.types.slice(),
-      turretTypes:tri.turretTypes.slice(),baseTurretTypes:tri.turretTypes.slice(),
-      hover:false,slotX,isShape:true,content
-    };
-    G.choices.push(obj);
-    drawChoiceCells(obj);
-  }
-
   const shapes=[...WALL_SHAPES];
   for(let i=shapes.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[shapes[i],shapes[j]]=[shapes[j],shapes[i]];}
-  {
-    let cells=shapes[0].map(c=>[...c]);
+  let wallIdx=0;
+  function makeWallCard(slotX){
+    let cells=shapes[wallIdx++%shapes.length].map(c=>[...c]);
     const rot=(Math.random()*4)|0;
     for(let k=0;k<rot;k++)cells=rotCells(cells,1);
     const types=cells.map(()=>'WALL');
@@ -1080,7 +1063,6 @@ function newChoices(){
     const card=el('g',{},choicesG);
     el('rect',{x:-slotW/2,y:-slotW/2,width:slotW,height:slotW,rx:10,fill:'#fff',stroke:'#ddd','stroke-width':1.5},card);
     const content=el('g',{},card);
-    const slotX=x0+2*(slotW+gap)+slotW/2;
     card.setAttribute('transform',`translate(${slotX} ${CHOICE.y})`);
     const obj={
       el:card,x0:slotX-slotW/2,x1:slotX+slotW/2,half:slotW/2,
@@ -1092,7 +1074,41 @@ function newChoices(){
     G.choices.push(obj);
     drawChoiceCells(obj);
   }
-  
+  function makeTurretCard(slotX,tt){
+    const card=el('g',{},choicesG);
+    el('rect',{x:-slotW/2,y:-slotW/2,width:slotW,height:slotW,rx:10,fill:'#fff',stroke:'#ddd','stroke-width':1.5},card);
+    const cg=el('g',{transform:`translate(${-cp/2} ${-cp/2})`},card);
+    buildTurretArt(cg,tt,cp);
+    card.setAttribute('transform',`translate(${slotX} ${CHOICE.y})`);
+    G.choices.push({el:card,x0:slotX-slotW/2,x1:slotX+slotW/2,half:slotW/2,cells:[[0,0]],types:['TURRET'],turretTypes:[tt],hover:false,slotX});
+  }
+  if(bossesDefeated>0){
+    // Create a 2-tile piece: 1 Basic Turret + 1 Wall
+    let duoCells = [[0,0],[1,0]];
+    const duoRot = (Math.random()*4)|0;
+    for(let k=0;k<duoRot;k++) duoCells = rotCells(duoCells, 1);
+    const duoTurretIdx = (Math.random()*2)|0;
+    const duoTypes = [duoTurretIdx===0?'TURRET':'WALL', duoTurretIdx===1?'TURRET':'WALL'];
+    const duoTurretTypes = [duoTurretIdx===0?'BASIC':null, duoTurretIdx===1?'BASIC':null];
+
+    const duoSlotX = x0+(slotW+gap)+slotW/2;
+    const duoCard = el('g',{},choicesG);
+    el('rect',{x:-slotW/2,y:-slotW/2,width:slotW,height:slotW,rx:10,fill:'#fff',stroke:'#ddd','stroke-width':1.5},duoCard);
+    const duoContent = el('g',{},duoCard);
+    duoCard.setAttribute('transform',`translate(${duoSlotX} ${CHOICE.y})`);
+    const duoObj = {
+      el:duoCard,x0:duoSlotX-slotW/2,x1:duoSlotX+slotW/2,half:slotW/2,
+      cells:duoCells.map(cc=>[...cc]),baseCells:duoCells.map(cc=>[...cc]),
+      types:duoTypes.slice(),baseTypes:duoTypes.slice(),
+      turretTypes:duoTurretTypes.slice(),baseTurretTypes:duoTurretTypes.slice(),
+      hover:false,slotX:duoSlotX,isShape:true,content:duoContent
+    };
+    G.choices.push(duoObj);
+    drawChoiceCells(duoObj);
+  }else{
+    makeWallCard(x0+(slotW+gap)+slotW/2);
+  }
+  makeWallCard(x0+2*(slotW+gap)+slotW/2);
   const rotateSlotX = x0 + 3 * (slotW + gap) + slotW / 2;
   const rotateCard = el('g', {}, choicesG);
   el('rect', {x: -slotW/2, y: -slotW/2, width: slotW, height: slotW, rx: 10, fill: '#fff', stroke: '#ddd', 'stroke-width': 1.5}, rotateCard);
@@ -1163,7 +1179,7 @@ function commitPiece(){
   G.choicesFading=true;
 }
 function startPlacement(){
-  phase='place';G.round=0;G.pause=0;G.placementsAllowed=3+bossesDefeated;selection=null;
+  phase='place';G.round=0;G.pause=0;G.placementsAllowed=3;selection=null;
   if(G.wave>1 && (G.wave-1)%5===0)refillChestsWithUpgrades();
   showInstructions();newChoices();drawTurretPoolHUD();
 }
