@@ -535,6 +535,57 @@ const TURRET_INFO={
   MINE:'Proximity mine. Blasts when aliens get close, stunning all aliens within 4 tiles for 4 seconds. Consumed by the blast.'
 };
 let turretPool={BASIC:4,FLAME:0,FREEZE:0,SNIPER:0,HOMING:0,MINE:0};
+let turretLevels={FLAME:1,FREEZE:1,SNIPER:1,HOMING:1,MINE:1};
+
+function upgradeDescription(type,level){
+  if(type==='FLAME'&&level===2)return 'INCREASES RANGE BY 50 PERCENT.';
+  if(type==='FLAME'&&level===3)return 'DOUBLES FLAME DAMAGE.';
+  if(type==='HOMING'&&level===2)return 'ALSO FIRES A MISSILE BEHIND THE CANNON.';
+  if(type==='HOMING'&&level===3)return 'FIRES 3 MISSILES AT 120 DEGREES.';
+  if(type==='FREEZE'&&level===2)return 'FROZEN ENEMIES EXPLODE FOR 1 DAMAGE ON DEATH.';
+  if(type==='FREEZE'&&level===3)return 'FROZEN ENEMIES EXPLODE FOR 2 DAMAGE ON DEATH.';
+  if(type==='SNIPER'&&level===2)return 'RELOAD TIME DECREASED BY 50 PERCENT.';
+  if(type==='SNIPER'&&level===3)return 'KILLING SHOTS PIERCE ONE MORE ENEMY.';
+  if(type==='MINE'&&level===2)return 'STUNNED ENEMIES ARE FROZEN FOR 2 SECONDS AFTER STUN.';
+  if(type==='MINE'&&level===3)return 'ALL ENEMIES ARE ALSO STUNNED FOR 1 SECOND.';
+  return '';
+}
+function availableUpgrades(){
+  const arr=[];
+  const types=['FLAME','FREEZE','SNIPER','HOMING','MINE'];
+  for(const t of types){
+    if(turretLevels[t]<3)arr.push({type:t,level:turretLevels[t]+1});
+  }
+  return arr;
+}
+function applyUpgrade(type){
+  if(turretLevels[type]!==undefined && turretLevels[type]<3){
+    turretLevels[type]++;
+  }
+}
+function refillChestsWithUpgrades(){
+  const avail=availableUpgrades();
+  for(let i=avail.length-1;i>0;i--){
+    const j=(Math.random()*(i+1))|0;
+    [avail[i],avail[j]]=[avail[j],avail[i]];
+  }
+  let idx=0;
+  for(const uc of upgradeContainers){
+    if(!uc.collected)continue; // ONLY slots that HAVE BEEN TAKEN get refilled
+    if(idx<avail.length){
+      const up=avail[idx++];
+      uc.mode='upgrade';
+      uc.upgradeType=up.type;
+      uc.upgradeLevel=up.level;
+      uc.rewards=[up.type+' LV '+up.level];
+      uc.collected=false;      // make it collectable again
+      uc.el.setAttribute('opacity',1);
+    }else{
+      uc.mode='empty';
+      uc.el.setAttribute('opacity',0);
+    }
+  }
+}
 
 function drawTurretPoolHUD(){
   turretPoolG.textContent='';
@@ -617,7 +668,7 @@ function spawnUpgradeContainers(){
     el('rect',{x:s*0.3,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
     el('rect',{x:s*0.62,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
     el('circle',{cx:s*0.5,cy:s*0.45,r:s*0.06,fill:'#ffca28',stroke:'#3e2723','stroke-width':1.5},g);
-    upgradeContainers.push({cell:c,el:g,collected:false,rewards});
+    upgradeContainers.push({cell:c,el:g,collected:false,rewards,mode:'pool'});
   });
 }
 
@@ -630,8 +681,16 @@ function checkUpgradeCollection(r,c){
       uc.el.setAttribute('opacity',0);
       burst(cellX(uc.cell.x)+CELL/2,cellY(uc.cell.y)+CELL/2,'#a45cff',1.5);
       shockRing(cellX(uc.cell.x)+CELL/2,cellY(uc.cell.y)+CELL/2,CELL,'#a45cff',0.5);
-      addUpgradesToPool(uc.rewards);
-      showToast(['UPGRADE ACQUIRED!',uc.rewards.join(', ')]);
+
+      if(uc.mode==='upgrade'){
+        applyUpgrade(uc.upgradeType);
+        const desc=upgradeDescription(uc.upgradeType,uc.upgradeLevel);
+        showToast([uc.upgradeType+' LV '+uc.upgradeLevel,...wrapText(desc,24)]);
+      }else{
+        addUpgradesToPool(uc.rewards);
+        showToast(['UPGRADE ACQUIRED!',uc.rewards.join(', ')]);
+      }
+
       SFX.play('upgrade');
     }
   }
@@ -807,7 +866,8 @@ function bulletHitFlicker(x,y){
 function turretHasTarget(s){
   const tt=s.turretType||'BASIC';
   const cx=s.c+0.5,cy=s.r+0.5;
-  const range=tt==='SNIPER'?CFG.BULLET_RANGE*2.5:tt==='HOMING'?CFG.BULLET_RANGE*1.5:tt==='FLAME'?2.5:CFG.BULLET_RANGE;
+  const flameRange=2.5*(turretLevels.FLAME>=2?1.5:1);
+  const range=tt==='SNIPER'?CFG.BULLET_RANGE*2.5:tt==='HOMING'?CFG.BULLET_RANGE*1.5:tt==='FLAME'?flameRange:CFG.BULLET_RANGE;
   const detRange = range + 1.5;
   for(const a of aliens){
     if(a.state==='dying')continue;
@@ -832,12 +892,22 @@ function explodeMine(s){
     const ang=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*CFG.STUN_RADIUS*CELL;
     burst(px+Math.cos(ang)*d,py+Math.sin(ang)*d,'#fff176',0.6);
   }
+
+  const mineLevel=turretLevels.MINE;
   for(const a of aliens){
     if(a.state==='dying'||a.alienType==='boss')continue;
     if(Math.hypot(a.x-cx,a.y-cy)<=CFG.STUN_RADIUS){
       a.stunned=CFG.STUN_DURATION;
+      if(mineLevel>=2)a.postStunFreeze=2;
     }
   }
+  if(mineLevel>=3){
+    for(const a of aliens){
+      if(a.state==='dying'||a.alienType==='boss')continue;
+      a.stunned=Math.max(a.stunned,1);
+    }
+  }
+
   grid[s.r][s.c]=null;
   const si=structures.indexOf(s);if(si>=0)structures.splice(si,1);
   const ti=turrets.indexOf(s);if(ti>=0)turrets.splice(ti,1);
@@ -1092,7 +1162,11 @@ function commitPiece(){
   G.piece=null;G.round++;G.pause=0.45;
   G.choicesFading=true;
 }
-function startPlacement(){phase='place';G.round=0;G.pause=0;G.placementsAllowed=3+bossesDefeated;selection=null;showInstructions();newChoices();drawTurretPoolHUD();}
+function startPlacement(){
+  phase='place';G.round=0;G.pause=0;G.placementsAllowed=3+bossesDefeated;selection=null;
+  if(G.wave>1 && (G.wave-1)%5===0)refillChestsWithUpgrades();
+  showInstructions();newChoices();drawTurretPoolHUD();
+}
 function endPlacement(){hideInstructions();phase='preAttack';G.timer=0.8;turretPoolG.setAttribute('opacity',0);}
 function updateInstructions(dt){
   if(!instr.el) return;
@@ -1366,6 +1440,7 @@ function spawnAlien(cell,type='normal'){
     hp:baseHp,maxHp:baseHp,
     frozen:0,
     stunned:0,
+    postStunFreeze:0,
     alienType:type,
     stepsSinceHPBoost:0,
     jumpT:0,
@@ -1496,15 +1571,19 @@ function decide(a){
 }
 function startStep(a,c){a.state='walk';a.from={...a.cell};a.to=c;a.mt=0;}
 function damageAlien(a,amt){
-  if(a.state==='dying')return;
+  if(a.state==='dying')return false;
   if(a.alienType==='boss'&&!a.vulnerable){
     a.flash=0.1;
-    return;
+    return false;
   }
   a.hp-=amt;
   a.flash=0.15;
   if(a.alienType==='boss')drawBossMeter();
-  if(a.hp<=0)killAlien(a);
+  if(a.hp<=0){
+    killAlien(a);
+    return true;
+  }
+  return false;
 }
 
 function hurtHeart(amt){
@@ -1551,7 +1630,7 @@ function spawnBoss(cell){
     path:null,pathIdx:0,distTraveled:0,
     breach:false,
     hp:bossHp,maxHp:bossHp,
-    frozen:0,stunned:0,
+    frozen:0,stunned:0,postStunFreeze:0,
     alienType:'boss',
     shootCool:0,
     bossPhase:'enter',bossT:0,spawnCount:0,
@@ -1731,7 +1810,13 @@ function updateAliens(dt,t){
     a.aliveTime+=dt;a.walkT+=dt*7;
     if(a.flash>0)a.flash-=dt*4;
     if(a.frozen>0)a.frozen-=dt;
-    if(a.stunned>0)a.stunned-=dt;
+    if(a.stunned>0){
+      a.stunned-=dt;
+      if(a.stunned<=0 && a.postStunFreeze>0){
+        a.frozen=Math.max(a.frozen,a.postStunFreeze);
+        a.postStunFreeze=0;
+      }
+    }
     if(a.shootCool>0)a.shootCool-=dt;
     const frozenMult=a.frozen>0?0.34:1;
     const typeMult=a.alienType==='jumper'?CFG.JUMPER_SPEED_MULT:1;
@@ -1938,6 +2023,18 @@ function killAlien(a, purge=false){
       const s=grid[c.y][c.x];
       if(s)damageStruct(s,CFG.EXPLODE_DMG);
     }
+
+    if(a.frozen>0 && turretLevels.FREEZE>=2){
+      const fd=turretLevels.FREEZE>=3?2:1;
+      for(const other of aliens){
+        if(other===a || other.state==='dying')continue;
+        if(Math.hypot(other.x-a.x,other.y-a.y)<=1.5){
+          damageAlien(other,fd);
+        }
+      }
+      burst(cellX(a.x),cellY(a.y),'#4fc3f7',1.2);
+      shockRing(cellX(a.x),cellY(a.y),1.5*CELL,'#4fc3f7',0.35);
+    }
   }
 }
 
@@ -1971,7 +2068,8 @@ function updateTurrets(dt){
       continue;
     }
 
-    const range=tt==='SNIPER'?CFG.BULLET_RANGE*2.5:tt==='HOMING'?CFG.BULLET_RANGE*1.5:tt==='FLAME'?2.5:CFG.BULLET_RANGE;
+    const flameRange=2.5*(turretLevels.FLAME>=2?1.5:1);
+    const range=tt==='SNIPER'?CFG.BULLET_RANGE*2.5:tt==='HOMING'?CFG.BULLET_RANGE*1.5:tt==='FLAME'?flameRange:CFG.BULLET_RANGE;
 
     if(tt==='SNIPER'&&s.beamEl){
       const bx=CELL/2+Math.cos(s.angle)*range*CELL,by=CELL/2+Math.sin(s.angle)*range*CELL;
@@ -2016,6 +2114,7 @@ function updateTurrets(dt){
           }else{
             if(s.flameDmgCool<=0){
               let hitAny=false;
+              const flameDmg=turretLevels.FLAME>=3?2:1;
               for(const a of aliens){
                 if(a.state==='dying'||a.alienType==='boss')continue;
                 const dx=a.x-cx,dy=a.y-cy,dist=Math.hypot(dx,dy);
@@ -2023,7 +2122,7 @@ function updateTurrets(dt){
                 const angToAlien=Math.atan2(dy,dx);
                 const diff=Math.abs(angNorm(angToAlien-s.angle));
                 if(diff<0.4){
-                  damageAlien(a,1);
+                  damageAlien(a,flameDmg);
                   hitAny=true;
                 }
               }
@@ -2049,7 +2148,7 @@ function updateTurrets(dt){
       SFX.play('shoot');
       s.hp-=1;if(s.hp<=0)destroyStruct(s);
     }else if(tt==='SNIPER'){
-      s.cool=CFG.TURRET_RATE*2;
+      s.cool=CFG.TURRET_RATE*(turretLevels.SNIPER>=2?1:2);
       if(s.beamEl){s.beamEl.setAttribute('stroke','#fff');s.beamEl.setAttribute('opacity',0.9);}
       const dx=Math.cos(s.angle),dy=Math.sin(s.angle);
       bullets.push({x:cx+dx*0.42,y:cy+dy*0.42,dx,dy,dist:0,type:'SNIPER',dmg:3,el:el('circle',{r:0.06*CELL,fill:'#9c27b0'},bulletG)});
@@ -2057,10 +2156,15 @@ function updateTurrets(dt){
       s.hp-=1;if(s.hp<=0)destroyStruct(s);
     }else if(tt==='HOMING'){
       s.cool=CFG.TURRET_RATE;
-      const dx=Math.cos(s.angle),dy=Math.sin(s.angle);
-      const mg=el('g',{},bulletG);
-      el('polygon',{points:`0,-3 8,0 0,3`,fill:'#ff6f00',stroke:'#111','stroke-width':0.5,transform:`scale(${CELL*0.04})`},mg);
-      bullets.push({x:cx+dx*0.42,y:cy+dy*0.42,dx,dy,dist:0,type:'HOMING',dmg:1,el:mg});
+      const homingLevel=turretLevels.HOMING;
+      const offsets=homingLevel>=3?[0,Math.PI*2/3,-Math.PI*2/3]:homingLevel>=2?[0,Math.PI]:[0];
+      for(const off of offsets){
+        const ang=s.angle+off;
+        const dx=Math.cos(ang),dy=Math.sin(ang);
+        const mg=el('g',{},bulletG);
+        el('polygon',{points:`0,-3 8,0 0,3`,fill:'#ff6f00',stroke:'#111','stroke-width':0.5,transform:`scale(${CELL*0.04})`},mg);
+        bullets.push({x:cx+dx*0.42,y:cy+dy*0.42,dx,dy,dist:0,type:'HOMING',dmg:1,el:mg});
+      }
       SFX.play('homing');
       s.hp-=1;if(s.hp<=0)destroyStruct(s);
     }
@@ -2123,9 +2227,13 @@ function updateBullets(dt){
         hit=(dx*dx+dy*dy)<hitR2;
       }
       if(hit){
-        damageAlien(a,dmg);
-        dead=true;
+        const killed=damageAlien(a,dmg);
         bulletHitFlicker(cellX(b.x),cellY(b.y));
+        if(b.type==='SNIPER' && turretLevels.SNIPER>=3 && !b.pierced && killed){
+          b.pierced=true;
+          continue;
+        }
+        dead=true;
         break;
       }
     }
@@ -2212,7 +2320,7 @@ function updateTooltip(){
       }
     }
     if(lootUC){
-      data={c:mouse.cell,isLoot:true,rewards:lootUC.rewards};
+      data={c:mouse.cell,isLoot:true,lootUC};
     }else if(s){
       data={c:mouse.cell,hp:s.hp,max:s.maxHp,isHeart:false};
     }else if(mouse.cell.x===HEART.x&&mouse.cell.y===HEART.y){
@@ -2221,10 +2329,16 @@ function updateTooltip(){
   }
   if(!data){hideTooltip();if(phase!=='place'&&phase!=='preAttack')svg.style.cursor='default';return;}
   if(data.isLoot){
+    const uc=data.lootUC;
     const key='loot_'+data.c.x+'_'+data.c.y;
     if(key!==tipKey){
       tipKey=key;choiceTooltipKey='';tooltipG.textContent='';
-      const lines=['BUILD ADJACENT TO LOOT.',...data.rewards];
+      let lines;
+      if(uc.mode==='upgrade'){
+        lines=['BUILD ADJACENT TO LOOT.',uc.upgradeType+' LV '+uc.upgradeLevel,...wrapText(upgradeDescription(uc.upgradeType,uc.upgradeLevel),24)];
+      }else{
+        lines=['BUILD ADJACENT TO LOOT.',...uc.rewards];
+      }
       const scale=1.0,lineH=LH*scale+4,padX=11,padY=8;
       let maxW=0;
       const built=lines.map(ln=>{const t=buildText(ln.toUpperCase(),scale,2,'#111');maxW=Math.max(maxW,t.w);return t;});
@@ -2261,12 +2375,13 @@ function fullRestart(){
   choicesG.textContent='';choicesG.style.display='none';
   instrG.textContent='';instrG.style.display='none';instr.state='gone';
   bannerG.textContent='';banner=null;tooltipG.textContent='';hideTooltip();
-  upgradeContainersG.textContent='';turretPoolG.textContent='';
+  upgradeContainersG.textContent='';upgradeContainers=[];turretPoolG.textContent='';
   bossHudG.textContent='';bossHudG.setAttribute('opacity',0);
   selection=null;G=freshG();attackElapsed=0;aliensKilled=0;
   heartHp=CFG.HEART_HP;heartDead=false;heartShake=0;
   heartshots=CFG.HEARTSHOT_START;gameStarted=false;drawHeartshotsHUD();
   boss=null;heartSelectCool=0;choiceRot=0;bossesDefeated=0;screenShake=0;
+  turretLevels={FLAME:1,FREEZE:1,SNIPER:1,HOMING:1,MINE:1};
   heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
   heartG.setAttribute('opacity',0);
   fadeRect.setAttribute('opacity',0);selRing.setAttribute('opacity',0);
