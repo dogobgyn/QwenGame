@@ -72,7 +72,7 @@ const CFG={
   JUMPER_SPEED_MULT:0.7,
   JUMPER_SHOT_RATE:1.6,JUMPER_SHOT_RANGE:3,JUMPER_SHOT_SPEED:6,
 };
-const ALIEN_HP={normal:CFG.NORMAL_HP,intermediate:3,jumper:1,strong:8,flyer:1,boss:50};
+const ALIEN_HP={normal:CFG.NORMAL_HP,intermediate:3,jumper:1,strong:8,flyer:1,boss:30};
 const BOSS_RADIUS=1.25;
 const ALIEN_COLORS={
   normal:['#39d353','#1f8f3a'],
@@ -504,9 +504,184 @@ let heartHp=CFG.HEART_HP,heartDead=false,heartShake=0,overT=0;
 let heartshots=CFG.HEARTSHOT_START,gameStarted=false;
 let aliensKilled=0;
 let cheatMode=false;
+let heartInvincible=false;
+let cheatStartWave=1;
 let boss=null,heartSelectCool=0;
 let bossesDefeated=0,screenShake=0;
 const greenHearts=[];
+let placementsPerWave = 3;
+let turretAdjacencyRemoved = false;
+let winT = 0;
+const tankCannonballs = [];
+function makeTankArt(g) {
+  const rotG = el('g', {}, g);
+  el('rect', {x:-1, y:-1, width:2, height:2, fill:'#556b2f', stroke:'#2f4f4f', 'stroke-width':0.1, rx:0.2}, rotG);
+  const turretG = el('g', {}, rotG);
+  el('circle', {r:0.6, fill:'#6b8e23', stroke:'#2f4f4f', 'stroke-width':0.08}, turretG);
+  el('rect', {x:0, y:-0.15, width:1.4, height:0.3, fill:'#2f4f4f', rx:0.1}, turretG);
+  return {g, rotG, turretG, bottom: 1.4};
+}
+const TANK_WAYPOINTS = [
+  {x:1.5, y:1.5}, {x:15.5, y:1.5}, {x:15.5, y:15.5}, {x:1.5, y:15.5},
+  {x:1.5, y:2.5}, {x:14.5, y:2.5}, {x:14.5, y:14.5}, {x:2.5, y:14.5},
+  {x:2.5, y:3.5}, {x:13.5, y:3.5}, {x:13.5, y:13.5}, {x:3.5, y:13.5},
+  {x:3.5, y:4.5}, {x:12.5, y:4.5}, {x:12.5, y:12.5}, {x:4.5, y:12.5},
+  {x:4.5, y:5.5}, {x:11.5, y:5.5}, {x:11.5, y:11.5}, {x:5.5, y:11.5},
+  {x:5.5, y:6.5}, {x:10.5, y:6.5}, {x:10.5, y:10.5}, {x:6.5, y:10.5},
+  {x:6.5, y:7.5}, {x:9.5, y:7.5}, {x:9.5, y:9.5}, {x:7.5, y:9.5},
+  {x:7.5, y:8.5}, {x:8.5, y:8.5}
+];
+function spawnTankBoss(cell) {
+  const bossHp = cheatMode ? 10 : ALIEN_HP.boss;
+  const a = {
+    x: 1.5, y: 1.5, cell: {x: 1, y: 1},
+    state: 'alive', t: 0, aliveTime: 0, speed: 2.5, art: makeAlienArt('tank'),
+    walkT: 0, from: null, to: null, mt: 0, target: null, flash: 0, wait: 0, lunge: 0,
+    path: null, pathIdx: 0, distTraveled: 0, breach: false, hp: bossHp, maxHp: bossHp,
+    frozen: 0, stunned: 0, postStunFreeze: 0, alienType: 'tank', shootCool: 0, heading: 0,
+    tankWpIdx: 0, tankLegStartTime: 0, tankLegDuration: 14 / 2.5,
+    tankShotsTotal: 1, tankShotTimes: [Math.random() * (14 / 2.5)], vulnerable: true
+  };
+  aliens.push(a);
+  boss = a;
+  drawBossMeter();
+}
+function updateTankBoss(a, dt, t) {
+  a.aliveTime += dt;
+  if (a.flash > 0) a.flash -= dt * 4;
+  if (a.state === 'dying') {
+    a.t += dt;
+    const dur = 1.6;
+    a.boomAccum = (a.boomAccum || 0) + dt;
+    while (a.boomAccum > 0.08) {
+      a.boomAccum -= 0.08;
+      const ox = a.x + (Math.random() - 0.5) * 2.8;
+      const oy = a.y + (Math.random() - 0.5) * 2.8;
+      burst(cellX(ox), cellY(oy), pick(['#ff8c42', '#ffe066', '#ff2140', '#ffffff']), 1.5 + Math.random() * 1.5);
+      shockRing(cellX(ox), cellY(oy), (1 + Math.random() * 2) * CELL, pick(['#ff8c42', '#ffe066']), 0.4);
+    }
+    screenShake = Math.max(screenShake, 0.15);
+    const p = clamp01(a.t / dur);
+    const sc = Math.max(0, 1 - easeInCubic(p));
+    if (a.art.rotG) a.art.rotG.setAttribute('transform', 'rotate(' + ((a.heading || 0) * 180 / Math.PI + p * 120) + ')');
+    a.art.g.setAttribute('transform', 'translate(' + cellX(a.x) + ' ' + cellY(a.y) + ') scale(' + (CELL * sc) + ')');
+    a.art.g.setAttribute('opacity', String(1 - p));
+    if (a.t >= dur) { a.art.g.remove(); spawnGreenHeart(a.x, a.y); return true; }
+    return false;
+  }
+  if (a.tankWpIdx < TANK_WAYPOINTS.length - 1) {
+    const targetWp = TANK_WAYPOINTS[a.tankWpIdx + 1];
+    const dx = targetWp.x - a.x;
+    const dy = targetWp.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    a.heading = Math.atan2(dy, dx);
+    for (let oy = -1; oy <= 0; oy++) {
+      for (let ox = -1; ox <= 0; ox++) {
+        const cx = Math.floor(a.x) + ox;
+        const cy = Math.floor(a.y) + oy;
+        if (inGrid({x: cx, y: cy})) {
+          const s = structAt({x: cx, y: cy});
+          if (s) damageStruct(s, 1000);
+        }
+      }
+    }
+    const step = 2.5 * dt;
+    if (dist <= step) {
+      a.x = targetWp.x;
+      a.y = targetWp.y;
+      a.tankWpIdx++;
+      a.tankLegStartTime = a.aliveTime;
+      const nextTarget = TANK_WAYPOINTS[a.tankWpIdx + 1];
+      if (nextTarget) {
+        const legDist = Math.hypot(nextTarget.x - a.x, nextTarget.y - a.y);
+        a.tankLegDuration = legDist / 2.5;
+        a.tankShotsTotal = a.tankWpIdx;
+        a.tankShotTimes = [];
+        for (let i = 0; i < a.tankShotsTotal; i++) {
+          a.tankShotTimes.push(a.tankLegStartTime + Math.random() * a.tankLegDuration);
+        }
+        a.tankShotTimes.sort(function(x, y) { return x - y; });
+      }
+    } else {
+      a.x += (dx / dist) * step;
+      a.y += (dy / dist) * step;
+    }
+    if (a.tankShotTimes && a.tankShotTimes.length > 0 && a.aliveTime >= a.tankShotTimes[0]) {
+      a.tankShotTimes.shift();
+      const shootHeading = a.heading + Math.PI / 2;
+      const cb = {
+        x: a.x + Math.cos(shootHeading) * 1.5,
+        y: a.y + Math.sin(shootHeading) * 1.5,
+        dx: Math.cos(shootHeading),
+        dy: Math.sin(shootHeading),
+        hp: 3,
+        el: el('circle', {r: CELL * 0.25, fill: '#222', stroke: '#000', 'stroke-width': 2}, bulletG)
+      };
+      tankCannonballs.push(cb);
+      SFX.play('shoot');
+    }
+  }
+  let sc = 1;
+  if (a.flash > 0) sc *= 1.04;
+  if (a.art.rotG) a.art.rotG.setAttribute('transform', 'rotate(' + ((a.heading || 0) * 180 / Math.PI) + ')');
+  a.art.g.setAttribute('transform', 'translate(' + cellX(a.x) + ' ' + cellY(a.y) + ') scale(' + (CELL * sc) + ')');
+  if (a.art.flashEl) a.art.flashEl.setAttribute('opacity', a.flash > 0 ? String(0.4 * (a.flash / 0.15)) : '0');
+  return false;
+}
+function updateTankCannonballs(dt) {
+  for (let i = tankCannonballs.length - 1; i >= 0; i--) {
+    const c = tankCannonballs[i];
+    c.x += c.dx * 6 * dt;
+    c.y += c.dy * 6 * dt;
+    c.el.setAttribute('cx', cellX(c.x));
+    c.el.setAttribute('cy', cellY(c.y));
+    const gridCell = {x: Math.floor(c.x), y: Math.floor(c.y)};
+    if (inGrid(gridCell)) {
+      const s = structAt(gridCell);
+      if (s) damageStruct(s, CFG.EXPLODE_DMG * 2);
+    }
+    let removed = false;
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      if (Math.hypot(b.x - c.x, b.y - c.y) < 0.6) {
+        c.hp -= b.dmg;
+        b.el.remove();
+        bullets.splice(j, 1);
+        if (c.hp <= 0) {
+          c.el.remove();
+          tankCannonballs.splice(i, 1);
+          burst(cellX(c.x), cellY(c.y), '#ff8c42', 1.5);
+          removed = true;
+          break;
+        }
+      }
+    }
+    if (removed) continue;
+    if (c.x < -2 || c.x > GRID_N + 2 || c.y < -2 || c.y > GRID_N + 2) {
+      c.el.remove();
+      tankCannonballs.splice(i, 1);
+    }
+  }
+}
+function triggerWinScreen() { phase = 'win'; winT = 0; hideTooltip(); }
+function showWinScreen(score) {
+  goScreen.setAttribute('opacity', 1); goTitle.textContent = ''; goScore.textContent = ''; goBtn.textContent = ''; goLetters = [];
+  const titleScale = TL * view.k, scoreScale = TL * view.k, btnScale = BTN_SCALE * view.k;
+  const sw = W, sh = H; const goStr = 'YOU WIN'; const totalUnits = textUnits(goStr); const totalPx = totalUnits * titleScale;
+  const startX = (sw - totalPx) / 2, topY = sh * 0.3; let cur = 0, i = 0;
+  for (const ch of goStr) {
+    if (ch === ' ') { cur += SPACE; continue; } const gg = makeGlyph(ch); goTitle.appendChild(gg);
+    goLetters.push({el: gg, cx: startX + (cur + 5) * titleScale, cy: topY + 7 * titleScale, i, delay: i * 0.06, dur: 0.7, titleScale, fromY: -100});
+    cur += ADV; i++;
+  }
+  const stxt = 'FINAL SCORE ' + score; const st = buildText(stxt, scoreScale, 2, '#ff2140');
+  st.g.setAttribute('transform', `translate(${(sw - st.w) / 2} ${sh * 0.42})`); goScore.appendChild(st.g); goScore.setAttribute('opacity', 1);
+  const bbw = 66 * btnScale + 44, bbh = 14 * btnScale + 26, bbx = sw / 2, bby = sh * 0.6;
+  goBtnRect = el('rect', {x: bbx - bbw / 2, y: bby - bbh / 2, width: bbw, height: bbh, rx: 12, stroke: '#ff2140', 'stroke-width': 2.5, fill: '#1a0005'}, goBtn);
+  goBtnText = el('g', {'stroke-width': 2.2, 'stroke-linecap': 'round', fill: 'none', stroke: '#ff2140'}, goBtn);
+  'TITLE'.split('').forEach((ch, j) => { const g = makeGlyph(ch); g.setAttribute('transform', `translate(${bbx + (j * ADV + 5 - 33) * btnScale} ${bby}) scale(${btnScale}) translate(-5 -7)`); goBtnText.appendChild(g); });
+  goBtn._x = bbx; goBtn._y = bby; goPhase = 'winFadeIn'; goT = 0;
+}
 const BEAT=0.9,PULSE_AMP=0.075;
 function hb(t){const p=(((t%BEAT)+BEAT)%BEAT)/BEAT;const g=(c,w)=>Math.exp(-((p-c)*(p-c))/(2*w*w));return g(0.10,0.05)+0.55*g(0.34,0.065);}
 const svg=$('scene'),bg=$('bg'),world=$('world'),gridG=$('grid'),borderG=$('borderG'),heartG=$('heartG'),heartP=$('heart'),haloP=$('halo'),
@@ -745,6 +920,7 @@ function showGameOver(score){
 }
 function updateGameOver(dt){
   if(goPhase==='hidden')return;goT+=dt;
+  if(goPhase==='winFadeIn'){for(const b of goLetters){const p=easeOutCubic(clamp01((goT-b.delay)/b.dur));const y=lerp(b.fromY,b.cy,p);b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${b.titleScale}) translate(-5 -7)`);b.el.setAttribute('opacity',clamp01(p*2));}const btnOp=clamp01((goT-1.0)/0.5);goBtn.setAttribute('opacity',btnOp);if(goT>1.8)goPhase='idle';return;}
   if(goPhase==='fadeIn'){for(const b of goLetters){const p=easeOutCubic(clamp01((goT-b.delay)/b.dur));const y=lerp(b.cy-(LH*b.titleScale+60),b.cy,p);b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${b.titleScale}) translate(-5 -7)`);b.el.setAttribute('opacity',clamp01(p*2));}const btnOp=clamp01((goT-1.0)/0.5);goBtn.setAttribute('opacity',btnOp);if(goT>1.8)goPhase='idle';}
   else if(goPhase==='idle'){goBtn.setAttribute('opacity',1);}
   else if(goPhase==='fadeOut'){for(const b of goLetters){const pe=easeInCubic(clamp01((goT-b.delay*0.5)/0.5));const y=lerp(b.cy,b.cy-(LH*b.titleScale+80),pe);b.el.setAttribute('transform',`translate(${b.cx} ${y}) scale(${b.titleScale}) translate(-5 -7)`);b.el.setAttribute('opacity',clamp01(1-pe));}const btnOp=clamp01(1-goT/0.4);goBtn.setAttribute('opacity',btnOp);goScore.setAttribute('opacity',clamp01(1-goT/0.6));if(goT>1.0){goPhase='hidden';goScreen.setAttribute('opacity',0);fullRestart();}}
@@ -1133,7 +1309,7 @@ function drawGhost(){
   G.placed=pp.placed;
   const isTurretPiece = G.piece && G.piece.types.includes('TURRET');
   const adjTurret = isTurretPiece && hasAdjacentTurret(pp.placed);
-  G.valid=pp.valid&&isAdjacentToHeartOrStruct(pp.placed)&&!wouldBlockHeart(pp.placed)&&!adjTurret;
+  G.valid=pp.valid&&isAdjacentToHeartOrStruct(pp.placed)&&!wouldBlockHeart(pp.placed)&&!(adjTurret && !turretAdjacencyRemoved);
   for(const c of pp.placed){
     if(!inGrid(c))continue;
     const px=cellX(c.x),py=cellY(c.y);
@@ -1168,7 +1344,7 @@ function commitPiece(){
   if(!isAdjacentToHeartOrStruct(placed)){showToast(['ONLY BUILD NEXT TO','THE HEART OR STRUCTURES']);G.failT=0.3;return;}
   if(wouldBlockHeart(placed)){showToast(['THE HEART NEEDS','TO BREATHE']);G.failT=0.3;return;}
   const isTurretPiece = p.types.includes('TURRET');
-  if(isTurretPiece && hasAdjacentTurret(placed)){
+  if(isTurretPiece && hasAdjacentTurret(placed) && !turretAdjacencyRemoved){
     showToast(['TURRETS CANNOT BE','PLACED ADJACENT']);
     G.failT=0.3;return;
   }
@@ -1179,7 +1355,7 @@ function commitPiece(){
   G.choicesFading=true;
 }
 function startPlacement(){
-  phase='place';G.round=0;G.pause=0;G.placementsAllowed=3;selection=null;
+  phase='place';G.round=0;G.pause=0;G.placementsAllowed=placementsPerWave;selection=null;
   if(G.wave>1 && (G.wave-1)%5===0)refillChestsWithUpgrades();
   showInstructions();newChoices();drawTurretPoolHUD();
 }
@@ -1273,7 +1449,7 @@ function updateGates(dt,t){
     const gt=G.gates[gi];
     if(!gt.opened&&at>=gt.openTime){gt.opened=true;}
     if(gt.boss&&gt.opened&&!gt.bossSpawned&&at>=gt.openTime+0.2){
-      spawnBoss(gt.cell);
+      if (G.wave === 10) spawnTankBoss(gt.cell); else spawnBoss(gt.cell);
       gt.bossSpawned=true;
       G.spawned++;
     }
@@ -1402,12 +1578,12 @@ function makeAlienArt(type){
   else if(type==='strong')artData=makeStrongArt(g);
   else if(type==='flyer')artData=makeFlyerArt(g);
   else if(type==='intermediate')artData=makeIntermediateArt(g);
-  else if(type==='boss')artData=makeBossArt(g);
+  else if(type==='boss')artData=makeBossArt(g);else if(type==='tank')artData=makeTankArt(g);
   else artData=makeNormalArt(g);
 
   const flashR=type==='boss'?BOSS_RADIUS+0.1:0.35;
   const flashEl=el('circle',{cx:0,cy:0,r:flashR,fill:'#fff',opacity:0,'pointer-events':'none'},g);
-  const hpGroup=el('g',{},g);
+  const hpGroup=type==='tank'?null:el('g',{},g);
   const stunG=el('g',{opacity:0,'pointer-events':'none'},g);
   const starD='M0 -0.07 L0.02 -0.02 L0.07 0 L0.02 0.02 L0 0.07 L-0.02 0.02 L-0.07 0 L-0.02 -0.02 Z';
   for(let i=0;i<3;i++){
@@ -1594,7 +1770,7 @@ function damageAlien(a,amt){
   }
   a.hp-=amt;
   a.flash=0.15;
-  if(a.alienType==='boss')drawBossMeter();
+  if(a.alienType==='boss'||a.alienType==='tank')drawBossMeter();
   if(a.hp<=0){
     killAlien(a);
     return true;
@@ -1603,6 +1779,7 @@ function damageAlien(a,amt){
 }
 
 function hurtHeart(amt){
+  if(heartInvincible)return;
   heartHp-=amt;
   heartShake=0.15;
   SFX.play('heartHit');
@@ -1704,7 +1881,11 @@ function updateGreenHearts(dt){
         heartHp=Math.min(CFG.HEART_HP,heartHp+CFG.HEART_HP*0.15);
         heartShake=0.2;
         burst(HEART_CELL_PX.x,HEART_CELL_PX.y,'#39d353',2.0);
-        shockRing(HEART_CELL_PX.x,HEART_CELL_PX.y,2.5*CELL,'#39d353',0.5);
+                shockRing(HEART_CELL_PX.x,HEART_CELL_PX.y,2.5*CELL,'#39d353',0.5);
+        if (bossesDefeated === 1) showToast(['UPGRADE: SECOND PIECE CHOICE']);
+        else if (bossesDefeated === 2) { placementsPerWave = 4; showToast(['UPGRADE: 4 PIECES PER WAVE']); }
+        else if (bossesDefeated === 3) { turretAdjacencyRemoved = true; showToast(['UPGRADE: TURRETS BUILD ADJACENT']); }
+        else if (bossesDefeated === 4) triggerWinScreen();
       }
     }
   }
@@ -1818,6 +1999,10 @@ function updateAliens(dt,t){
   for(let i=aliens.length-1;i>=0;i--){
     const a=aliens[i];
 
+    if(a.alienType==='tank'){
+     if(updateTankBoss(a,dt,t))aliens.splice(i,1);
+     continue;
+    }
     if(a.alienType==='boss'){
       if(updateBossAlien(a,dt,t))aliens.splice(i,1);
       continue;
@@ -2001,7 +2186,7 @@ function killAlien(a, purge=false){
   heartshots=Math.min(CFG.HEARTSHOT_MAX,heartshots+CFG.HEARTSHOT_GAIN);
   drawHeartshotsHUD();
 
-  if(a.alienType==='boss'){
+  if(a.alienType==='boss'||a.alienType==='tank'){
     boss=null;
     drawBossMeter();
     bossesDefeated++;
@@ -2274,6 +2459,7 @@ function updateAttack(dt,t){
   updateAliens(dt,t);
   updateBullets(dt);
   updateEBullets(dt);
+  updateTankCannonballs(dt);
   updateProjectiles(dt);
   updateGreenHearts(dt);
   if(G.spawned>=G.total&&aliens.length===0&&!G.gates.length&&projectiles.length===0&&greenHearts.length===0){
@@ -2394,9 +2580,9 @@ function fullRestart(){
   upgradeContainersG.textContent='';upgradeContainers=[];turretPoolG.textContent='';
   bossHudG.textContent='';bossHudG.setAttribute('opacity',0);
   selection=null;G=freshG();attackElapsed=0;aliensKilled=0;
-  heartHp=CFG.HEART_HP;heartDead=false;heartShake=0;
+  heartHp=CFG.HEART_HP;heartDead=false;heartShake=0;heartInvincible=false;cheatStartWave=1;
   heartshots=CFG.HEARTSHOT_START;gameStarted=false;drawHeartshotsHUD();
-  boss=null;heartSelectCool=0;choiceRot=0;bossesDefeated=0;screenShake=0;
+  boss=null;heartSelectCool=0;choiceRot=0;bossesDefeated=0;screenShake=0;placementsPerWave=3;turretAdjacencyRemoved=false;winT=0;for(const c of tankCannonballs)c.el.remove();tankCannonballs.length=0;
   turretLevels={FLAME:1,FREEZE:1,SNIPER:1,HOMING:1,MINE:1};
   heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
   heartG.setAttribute('opacity',0);
@@ -2450,6 +2636,12 @@ window.addEventListener('pointerup', e => {
   }
 });
 addEventListener('keydown',e=>{
+  if (e.key === 'C' && e.shiftKey && phase==='intro' && !cheatMode) {
+    cheatMode=true;
+    cheatStartWave=10;
+    heartInvincible=true;
+    createToastAt(['CHEAT MODE: START WAVE 10'],D/2,D/2,1.0);
+  }
   if((e.key==='c'||e.key==='C')&&phase==='intro'&&!cheatMode){
     cheatMode=true;
     createToastAt(['CHEAT MODE'],D/2,D/2,1.0);
@@ -2508,6 +2700,15 @@ function frame(nowMs){
   let gOp=0,heartOp=0,hx=0,hy=0,hs=0;
   if(phase==='intro'){const gGrow=easeInOutCubic(clamp01((t-0.55)/3.75));setBg(255*gGrow);heartOp=clamp01((t-0.25)/1.0);hx=HEART_TITLE.x;hy=HEART_TITLE.y;hs=lerp(HEART_TITLE.small,HEART_TITLE.big,gGrow)*(1+PULSE_AMP*beat);drawTitleIntro(t);drawBtnIntro(t,beat);}
   else if(phase==='exit'){setBg(255);const qRaw=(t-tClick)/1.35,q=easeInOutCubic(clamp01(qRaw));gOp=0.15*easeOutCubic(clamp01((t-tClick)/0.9));hx=lerp(snap.hx,HEART_CELL_PX.x,q);hy=lerp(snap.hy,HEART_CELL_PX.y,q);hs=lerp(snap.s,HEART_CELL_SCALE,q)*(1+PULSE_AMP*beat);heartOp=1;const gone=drawTitleExit(t),bop=clamp01(1-(t-tClick)/0.3);btn.setAttribute('opacity',bop);if(bop<=0)btn.style.display='none';if(qRaw>=1&&gone){phase='waiting';titleG.style.display='none';G.timer=0.3;}}
+  else if(phase==='win'){
+    setBg(255);gOp=0.15;winT+=dt;
+    const p=easeInOutCubic(clamp01(winT/2.0));
+    hs=lerp(HEART_CELL_SCALE,HEART_TITLE.big,p);hx=lerp(HEART_CELL_PX.x,HEART_TITLE.x,p);hy=lerp(HEART_CELL_PX.y,HEART_TITLE.y,p);
+    heartOp=1;heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
+    haloP.setAttribute('opacity',(0.10+0.09*beat).toFixed(3));
+    if(winT>=2.0&&goPhase==='hidden')showWinScreen(aliensKilled);
+    updateGameOver(dt);
+  }
   else if(phase==='over'){
     setBg(255);gOp=0.15;heartOp=0;
     hx=HEART_CELL_PX.x;hy=HEART_CELL_PX.y;hs=HEART_CELL_SCALE*0.92;
@@ -2523,7 +2724,7 @@ function frame(nowMs){
     if(heartShake>0){heartShake-=dt;hx+=(Math.random()-0.5)*2.4;hy+=(Math.random()-0.5)*2.4;}
     heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
     haloP.setAttribute('opacity',(0.10+0.09*beat*(heartHp/CFG.HEART_HP)).toFixed(3));
-    if(phase==='waiting'){G.timer-=dt;if(G.timer<=0){drawHeartshotsHUD();startWave(1);}}
+    if(phase==='waiting'){G.timer-=dt;if(G.timer<=0){drawHeartshotsHUD();startWave(cheatStartWave);}}
     else if(phase==='banner')updateBanner(dt);
     else if(phase==='place'){updatePlacement(dt);updateProjectiles(dt);}
     else if(phase==='preAttack'){updatePlacement(dt);updateProjectiles(dt);G.timer-=dt;if(G.timer<=0)startAttack();}
