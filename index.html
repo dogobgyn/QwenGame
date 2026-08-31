@@ -72,15 +72,22 @@ const CFG={
   JUMPER_SPEED_MULT:0.7,
   JUMPER_SHOT_RATE:1.6,JUMPER_SHOT_RANGE:3,JUMPER_SHOT_SPEED:6,
 };
-const ALIEN_HP={normal:CFG.NORMAL_HP,intermediate:3,jumper:1,strong:8,flyer:1,boss:30};
-const BOSS_RADIUS=1.25;
+const ALIEN_HP = {normal:CFG.NORMAL_HP, intermediate:3, jumper:1, strong:8, flyer:1, darkflyer:3, boss:30, tankboss:50, darkboss:60, darkhopper:3, darkheart:80};
+const BOSS_RADIUS = 1.25;
+const DARKHEART_RADIUS = 1.4;        // NEW: hit radius of the 3x3 heart boss (in cells)
+const DARKHEART_TURRET_HP = 10;      // NEW: HP of the possessed dark turret form
+const DARKHEART_SHOT_HP = 5;         // NEW: HP of the small black heart projectiles
 const ALIEN_COLORS={
   normal:['#39d353','#1f8f3a'],
   intermediate:['#26a69a','#00695c'],
   jumper:['#9c27b0','#6a1b9a'],
   strong:['#e53935','#b71c1c'],
   flyer:['#457b9d','#1d3557'],
+  darkflyer:['#5c1a1a','#2b0d0d'],
   boss:['#90a4ae','#37474f'],
+  darkboss:['#2d0a0a','#1a0505'],
+  darkhopper:['#c62828','#4a0e0e'],
+  darkheart:['#0a0a0a','#000000'],
 };
 const HS_SIZE=2;
 const D=1000,GRID_N=17,GRID_SIDE=680,CELL=GRID_SIDE/GRID_N,GX0=(D-GRID_SIDE)/2,GY0=170;
@@ -248,7 +255,7 @@ const SFX = {
         osc.connect(gain).connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + 0.4);
-        
+
         const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.3, this.ctx.sampleRate);
         const data = buf.getChannelData(0);
         for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i/data.length);
@@ -329,50 +336,50 @@ const SFX = {
       case 'titleChime': {
         const notes = [523.25, 659.25, 783.99, 1046.50];
         notes.forEach((freq, i) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = freq;
-          const t0 = now + i * 0.1;
-          gain.gain.setValueAtTime(0, t0);
-          gain.gain.linearRampToValueAtTime(0.08, t0 + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
-          osc.connect(gain).connect(this.ctx.destination);
-          osc.start(t0);
-          osc.stop(t0 + 0.4);
-        });
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t0 = now + i * 0.1;
+            gain.gain.setValueAtTime(0, t0);
+            gain.gain.linearRampToValueAtTime(0.08, t0 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+            osc.connect(gain).connect(this.ctx.destination);
+            osc.start(t0);
+            osc.stop(t0 + 0.4);
+          });
         break;
       }
       case 'waveChime': {
         const notes = [392.00, 523.25, 659.25, 783.99];
         notes.forEach((freq, i) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.value = freq;
-          const t0 = now + i * 0.08;
-          gain.gain.setValueAtTime(0, t0);
-          gain.gain.linearRampToValueAtTime(0.1, t0 + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
-          osc.connect(gain).connect(this.ctx.destination);
-          osc.start(t0);
-          osc.stop(t0 + 0.3);
-        });
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            const t0 = now + i * 0.08;
+            gain.gain.setValueAtTime(0, t0);
+            gain.gain.linearRampToValueAtTime(0.1, t0 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+            osc.connect(gain).connect(this.ctx.destination);
+            osc.start(t0);
+            osc.stop(t0 + 0.3);
+          });
         break;
       }
       case 'bossChime': {
         const notes = [82.41, 77.78, 73.42, 69.30];
         notes.forEach((freq, i) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, now + i * 0.16);
-          gain.gain.setValueAtTime(0.12, now + i * 0.16);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.16 + 0.9);
-          osc.connect(gain).connect(this.ctx.destination);
-          osc.start(now + i * 0.16);
-          osc.stop(now + i * 0.16 + 0.9);
-        });
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, now + i * 0.16);
+            gain.gain.setValueAtTime(0.12, now + i * 0.16);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.16 + 0.9);
+            osc.connect(gain).connect(this.ctx.destination);
+            osc.start(now + i * 0.16);
+            osc.stop(now + i * 0.16 + 0.9);
+          });
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -428,6 +435,33 @@ const SFX = {
         }
         break;
       }
+      case 'cannon': {
+        const t = now;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(90, t);
+        osc.frequency.exponentialRampToValueAtTime(25, t + 0.4);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.connect(gain).connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.4);
+        const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.35, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 500;
+        const nGain = this.ctx.createGain();
+        nGain.gain.setValueAtTime(0.25, t);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        noise.connect(lp).connect(nGain).connect(this.ctx.destination);
+        noise.start(t);
+        break;
+      }
     }
   }
 };
@@ -473,8 +507,8 @@ const GLYPHS={
   '%':[[9,0,1,14],[1.5,1.5,4,1.5],[4,1.5,4,4],[4,4,1.5,4],[1.5,4,1.5,1.5],[6,10,8.5,10],[8.5,10,8.5,12.5],[8.5,12.5,6,12.5],[6,12.5,6,10]],
 };
 {const S={A:[1,0,9,0],B:[10,1,10,6],C:[10,8,10,13],D:[1,14,9,14],E:[0,8,0,13],F:[0,1,0,6],G:[1,7,9,7]};
- const M={'0':'ABCDEF','1':'BC','2':'ABGED','3':'ABGCD','4':'FGBC','5':'AFGCD','6':'AFGEDC','7':'ABC','8':'ABCDEFG','9':'ABCDFG'};
- for(const d in M)GLYPHS[d]=M[d].split('').map(s=>S[s]);}
+  const M={'0':'ABCDEF','1':'BC','2':'ABGED','3':'ABGCD','4':'FGBC','5':'AFGCD','6':'AFGEDC','7':'ABC','8':'ABCDEFG','9':'ABCDFG'};
+  for(const d in M)GLYPHS[d]=M[d].split('').map(s=>S[s]);}
 const LW=10,LH=14,ADV=14,SPACE=9;
 function makeGlyph(ch){const g=document.createElementNS(NS,'g');for(const s of GLYPHS[ch]){const l=document.createElementNS(NS,'line');l.setAttribute('x1',s[0]);l.setAttribute('y1',s[1]);l.setAttribute('x2',s[2]);l.setAttribute('y2',s[3]);g.appendChild(l);}return g;}
 function textUnits(s){let u=0;for(const c of s)u+=c===' '?SPACE:ADV;return Math.max(0,u-4);}
@@ -513,6 +547,7 @@ let placementsPerWave = 3;
 let turretAdjacencyRemoved = false;
 let winT = 0;
 const tankCannonballs = [];
+const dhShots = [];   // NEW: small black hearts fired by the Dark Heart boss
 function makeTankArt(g) {
   const rotG = el('g', {}, g);
   el('rect', {x:-1, y:-1, width:2, height:2, fill:'#556b2f', stroke:'#2f4f4f', 'stroke-width':0.1, rx:0.2}, rotG);
@@ -532,15 +567,17 @@ const TANK_WAYPOINTS = [
   {x:7.5, y:8.5}, {x:8.5, y:8.5}
 ];
 function spawnTankBoss(cell) {
-  const bossHp = cheatMode ? 10 : ALIEN_HP.boss;
+  const bossHp = cheatMode ? 10 : 50;
+  const cx = (cell && cell.x !== undefined ? cell.x : 1) + 0.5;
+  const cy = (cell && cell.y !== undefined ? cell.y : 1) + 0.5;
   const a = {
-    x: 1.5, y: 1.5, cell: {x: 1, y: 1},
-    state: 'alive', t: 0, aliveTime: 0, speed: 2.5, art: makeAlienArt('tank'),
+    x: cx, y: cy, cell: {x: Math.floor(cx), y: Math.floor(cy)},
+    state: 'bossEnter', t: 0, aliveTime: 0, speed: 2.5, art: makeAlienArt('tank'),
     walkT: 0, from: null, to: null, mt: 0, target: null, flash: 0, wait: 0, lunge: 0,
     path: null, pathIdx: 0, distTraveled: 0, breach: false, hp: bossHp, maxHp: bossHp,
     frozen: 0, stunned: 0, postStunFreeze: 0, alienType: 'tank', shootCool: 0, heading: 0,
     tankWpIdx: 0, tankLegStartTime: 0, tankLegDuration: 14 / 2.5,
-    tankShotsTotal: 1, tankShotTimes: [Math.random() * (14 / 2.5)], vulnerable: true
+    nextShotDist: 10, shotInterval: 10, firedTiles: new Set(), turretRecoil: 0, vulnerable: true
   };
   aliens.push(a);
   boss = a;
@@ -549,6 +586,7 @@ function spawnTankBoss(cell) {
 function updateTankBoss(a, dt, t) {
   a.aliveTime += dt;
   if (a.flash > 0) a.flash -= dt * 4;
+  if (a.turretRecoil > 0) a.turretRecoil = Math.max(0, a.turretRecoil - dt * 4);
   if (a.state === 'dying') {
     a.t += dt;
     const dur = 1.6;
@@ -564,9 +602,20 @@ function updateTankBoss(a, dt, t) {
     const p = clamp01(a.t / dur);
     const sc = Math.max(0, 1 - easeInCubic(p));
     if (a.art.rotG) a.art.rotG.setAttribute('transform', 'rotate(' + ((a.heading || 0) * 180 / Math.PI + p * 120) + ')');
+    if (a.art.turretG) a.art.turretG.setAttribute('transform', 'rotate(90) translate(' + (-0.35 * a.turretRecoil) + ' 0)');
     a.art.g.setAttribute('transform', 'translate(' + cellX(a.x) + ' ' + cellY(a.y) + ') scale(' + (CELL * sc) + ')');
     a.art.g.setAttribute('opacity', String(1 - p));
     if (a.t >= dur) { a.art.g.remove(); spawnGreenHeart(a.x, a.y); return true; }
+    return false;
+  }
+  if (a.state === 'bossEnter') {
+    a.t += dt;
+    const p = easeOutCubic(clamp01(a.t / 1.0));
+    if (p >= 1) { a.state = 'alive'; a.t = 0; }
+    if (a.art.rotG) a.art.rotG.setAttribute('transform', 'rotate(' + ((a.heading || 0) * 180 / Math.PI) + ')');
+    if (a.art.turretG) a.art.turretG.setAttribute('transform', 'rotate(90) translate(' + (-0.35 * a.turretRecoil) + ' 0)');
+    a.art.g.setAttribute('transform', 'translate(' + cellX(a.x) + ' ' + cellY(a.y) + ') scale(' + (CELL * Math.max(0.001, p)) + ')');
+    if (a.art.flashEl) a.art.flashEl.setAttribute('opacity', 0);
     return false;
   }
   if (a.tankWpIdx < TANK_WAYPOINTS.length - 1) {
@@ -585,7 +634,8 @@ function updateTankBoss(a, dt, t) {
         }
       }
     }
-    const step = 2.5 * dt;
+    const oldX = a.x, oldY = a.y, oldDist = a.distTraveled;
+    const step = Math.min(2.5 * dt, dist);
     if (dist <= step) {
       a.x = targetWp.x;
       a.y = targetWp.y;
@@ -595,35 +645,47 @@ function updateTankBoss(a, dt, t) {
       if (nextTarget) {
         const legDist = Math.hypot(nextTarget.x - a.x, nextTarget.y - a.y);
         a.tankLegDuration = legDist / 2.5;
-        a.tankShotsTotal = a.tankWpIdx;
-        a.tankShotTimes = [];
-        for (let i = 0; i < a.tankShotsTotal; i++) {
-          a.tankShotTimes.push(a.tankLegStartTime + Math.random() * a.tankLegDuration);
-        }
-        a.tankShotTimes.sort(function(x, y) { return x - y; });
       }
     } else {
       a.x += (dx / dist) * step;
       a.y += (dy / dist) * step;
     }
-    if (a.tankShotTimes && a.tankShotTimes.length > 0 && a.aliveTime >= a.tankShotTimes[0]) {
-      a.tankShotTimes.shift();
-      const shootHeading = a.heading + Math.PI / 2;
-      const cb = {
-        x: a.x + Math.cos(shootHeading) * 1.5,
-        y: a.y + Math.sin(shootHeading) * 1.5,
-        dx: Math.cos(shootHeading),
-        dy: Math.sin(shootHeading),
-        hp: 3,
-        el: el('circle', {r: CELL * 0.25, fill: '#222', stroke: '#000', 'stroke-width': 2}, bulletG)
-      };
-      tankCannonballs.push(cb);
-      SFX.play('shoot');
+    const movedDist = Math.hypot(a.x - oldX, a.y - oldY);
+    a.distTraveled += movedDist;
+    while (movedDist > 0 && a.distTraveled >= a.nextShotDist) {
+      const alpha = clamp01((a.nextShotDist - oldDist) / movedDist);
+      const shotX = oldX + (a.x - oldX) * alpha;
+      const shotY = oldY + (a.y - oldY) * alpha;
+      const sx = Math.round(shotX - 0.5) + 0.5;
+      const sy = Math.round(shotY - 0.5) + 0.5;
+      const key = sx + ',' + sy;
+      if (!a.firedTiles.has(key)) {
+        a.firedTiles.add(key);
+        const shootHeading = a.heading + Math.PI / 2;
+        let dirX = Math.round(Math.cos(shootHeading));
+        let dirY = Math.round(Math.sin(shootHeading));
+        if (!dirX && !dirY) { dirX = 0; dirY = 1; }
+        const cb = {
+          x: sx + dirX * 1.3,
+          y: sy + dirY * 1.3,
+          dx: dirX,
+          dy: dirY,
+          hp: 3,
+          frozen: 0,
+          el: el('circle', {r: CELL * 0.25, fill: '#222', stroke: '#000', 'stroke-width': 2}, bulletG)
+        };
+        tankCannonballs.push(cb);
+        a.turretRecoil = 1;
+        SFX.play('cannon');
+      }
+      a.shotInterval = Math.max(3, a.shotInterval - 1);
+      a.nextShotDist += a.shotInterval;
     }
   }
   let sc = 1;
   if (a.flash > 0) sc *= 1.04;
   if (a.art.rotG) a.art.rotG.setAttribute('transform', 'rotate(' + ((a.heading || 0) * 180 / Math.PI) + ')');
+  if (a.art.turretG) a.art.turretG.setAttribute('transform', 'rotate(90) translate(' + (-0.35 * a.turretRecoil) + ' 0)');
   a.art.g.setAttribute('transform', 'translate(' + cellX(a.x) + ' ' + cellY(a.y) + ') scale(' + (CELL * sc) + ')');
   if (a.art.flashEl) a.art.flashEl.setAttribute('opacity', a.flash > 0 ? String(0.4 * (a.flash / 0.15)) : '0');
   return false;
@@ -631,10 +693,13 @@ function updateTankBoss(a, dt, t) {
 function updateTankCannonballs(dt) {
   for (let i = tankCannonballs.length - 1; i >= 0; i--) {
     const c = tankCannonballs[i];
-    c.x += c.dx * 6 * dt;
-    c.y += c.dy * 6 * dt;
+    if (c.frozen > 0) c.frozen -= dt;
+    const fm = c.frozen > 0 ? 0.34 : 1;
+    c.x += c.dx * 3 * dt * fm;
+    c.y += c.dy * 3 * dt * fm;
     c.el.setAttribute('cx', cellX(c.x));
     c.el.setAttribute('cy', cellY(c.y));
+    c.el.setAttribute('fill', c.frozen > 0 ? '#4fc3f7' : '#222');
     const gridCell = {x: Math.floor(c.x), y: Math.floor(c.y)};
     if (inGrid(gridCell)) {
       const s = structAt(gridCell);
@@ -663,6 +728,280 @@ function updateTankCannonballs(dt) {
     }
   }
 }
+/* ---------------- DARK HEART FINAL BOSS (wave 20) ---------------- */
+const DH_FLY_SPEED = 7;
+const DH_SHOT_SPEED = 1;
+const DH_SHOT_RATE = 1.2;
+const DH_FLY_LEGS = 3;      // dash to this many locations
+const DH_LEG_WAIT = 4;      // seconds it waits at each location
+const DH_SHOT_SPIN = 360;   // deg/sec spin on the black heart shots
+
+function dhRandomPoint() {
+  const ang = Math.random() * Math.PI * 2;
+  return {
+    x: clamp(HEART.x + 0.5 + Math.cos(ang) * 8, DARKHEART_RADIUS, GRID_N - DARKHEART_RADIUS),
+    y: clamp(HEART.y + 0.5 + Math.sin(ang) * 8, DARKHEART_RADIUS, GRID_N - DARKHEART_RADIUS)
+  };
+}
+
+function dhFarthestTurret() {
+  const hx = HEART.x + 0.5, hy = HEART.y + 0.5;
+  let best = null, bd = -1;
+  for (const s of turrets) {
+    const d = Math.hypot(s.c + 0.5 - hx, s.r + 0.5 - hy);
+    if (d > bd) { bd = d; best = s; }
+  }
+  return best;
+}
+
+function makeDarkHeartArt(g) {
+  const heartG = el('g', {}, g);
+  const hs = 3 / 56;   // 3x3 cells
+  const halo = el('path', {d: HEART_D, fill: '#3d0000', opacity: 0.35, transform: `scale(${hs * 1.18})`}, heartG);
+  const heart = el('path', {d: HEART_D, fill: '#0a0a0a', stroke: '#000', 'stroke-width': 2, transform: `scale(${hs})`}, heartG);
+  // possessed-turret form
+  const turretG = el('g', {opacity: 0}, g);
+  el('rect', {x: -0.44, y: -0.44, width: 0.88, height: 0.88, rx: 0.12, fill: '#141414', stroke: '#000', 'stroke-width': 0.06}, turretG);
+  const turretRot = el('g', {}, turretG);
+  el('line', {x1: 0, y1: 0, x2: 0.5, y2: 0, stroke: '#3d0000', 'stroke-width': 0.16, 'stroke-linecap': 'round'}, turretRot);
+  el('circle', {r: 0.3, fill: '#1f1f1f', stroke: '#000', 'stroke-width': 0.07}, turretG);
+  el('circle', {r: 0.13, fill: '#8b0000'}, turretG);
+  return {g, heartG, halo, heart, turretG, turretRot, bottom: DARKHEART_RADIUS};
+}
+
+function spawnDarkHeartBoss(cell) {
+  const cx = cell.x + 0.5, cy = cell.y + 0.5;
+  const bossHp = cheatMode ? 10 : ALIEN_HP.darkheart;
+  aliens.push({
+    x: cx, y: cy,
+    cell: {x: clamp(Math.floor(cx), 0, GRID_N - 1), y: clamp(Math.floor(cy), 0, GRID_N - 1)},
+    state: 'bossEnter', t: 0, aliveTime: 0,
+    art: makeAlienArt('darkheart'),
+    flash: 0, hp: bossHp, maxHp: bossHp,
+    alienType: 'darkheart',
+    dhPhase: 'enter', dhT: 0,
+    flyLeg: 0, flyTarget: null, legWait: 0,
+    vulnerable: false,
+    turretHp: DARKHEART_TURRET_HP,
+    possTarget: null, possStart: null,
+    glideDir: {x: 0, y: 0}, glideDist: 0,
+    shootCool: 1, hoverT: 0, hoverBase: null, trailAcc: 0, heading: 0
+  });
+  boss = aliens[aliens.length - 1];
+  drawBossMeter();
+}
+
+function updateDarkHeartBoss(a, dt, t) {
+  a.aliveTime += dt;
+  if (a.flash > 0) a.flash -= dt * 4;
+  const hx = HEART.x + 0.5, hy = HEART.y + 0.5;
+  const beat = hb(t);
+
+  if (a.state === 'dying') {
+    a.t += dt;
+    const dur = 2.0;
+    a.boomAccum = (a.boomAccum || 0) + dt;
+    while (a.boomAccum > 0.07) {
+      a.boomAccum -= 0.07;
+      const ox = a.x + (Math.random() - 0.5) * 3.4, oy = a.y + (Math.random() - 0.5) * 3.4;
+      burst(cellX(ox), cellY(oy), pick(['#ff8c42','#ffe066','#8b0000','#ffffff']), 1.5 + Math.random() * 1.5);
+      shockRing(cellX(ox), cellY(oy), (1 + Math.random() * 2) * CELL, pick(['#ff8c42','#8b0000']), 0.4);
+    }
+    screenShake = Math.max(screenShake, 0.2);
+    const p = clamp01(a.t / dur);
+    const sc = Math.max(0, 1 - easeInCubic(p));
+    a.art.heartG.setAttribute('opacity', 1);
+    a.art.turretG.setAttribute('opacity', 0);
+    a.art.g.setAttribute('transform', `translate(${cellX(a.x)} ${cellY(a.y)}) scale(${CELL * sc})`);
+    a.art.g.setAttribute('opacity', String(1 - p));
+    if (a.t >= dur) { a.art.g.remove(); spawnGreenHeart(a.x, a.y); return true; }
+    return false;
+  }
+
+  if (a.state === 'bossEnter') {
+    a.t += dt;
+    const p = easeOutCubic(clamp01(a.t / 1.2));
+    a.art.heartG.setAttribute('opacity', 1);
+    a.art.turretG.setAttribute('opacity', 0);
+    a.art.halo.setAttribute('opacity', (0.2 + 0.2 * beat).toFixed(3));
+    a.art.g.setAttribute('transform', `translate(${cellX(a.x)} ${cellY(a.y)}) scale(${CELL * Math.max(0.001, p) * (1 + PULSE_AMP * beat)})`);
+    if (p >= 1) {
+      a.state = 'alive';
+      a.dhPhase = 'fly'; a.dhT = 0; a.flyLeg = 0; a.legWait = 0;
+      a.flyTarget = dhRandomPoint();
+      a.vulnerable = true;
+    }
+    if (a.art.flashEl) a.art.flashEl.setAttribute('opacity', 0);
+    return false;
+  }
+
+  a.dhT += dt;
+  if (a.shootCool > 0) a.shootCool -= dt;
+  let sc = 1 + PULSE_AMP * beat;   // beats just like the red heart
+
+  if (a.dhPhase === 'fly') {
+    a.vulnerable = true;
+    if (a.legWait > 0) {
+      a.legWait -= dt;   // pause at the current spot, beating in place
+      if (a.legWait <= 0) a.flyTarget = dhRandomPoint();
+    } else {
+      if (!a.flyTarget) a.flyTarget = dhRandomPoint();
+      const dx = a.flyTarget.x - a.x, dy = a.flyTarget.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      a.heading = Math.atan2(dy, dx);
+      const step = Math.min(DH_FLY_SPEED * dt, d);
+      a.x += dx / d * step; a.y += dy / d * step;
+      a.trailAcc += dt;
+      while (a.trailAcc > 0.06) { a.trailAcc -= 0.06; shockRing(cellX(a.x), cellY(a.y), CELL * 0.9, '#3d0000', 0.35); }
+      if (d <= DH_FLY_SPEED * dt) {
+        a.x = a.flyTarget.x; a.y = a.flyTarget.y;
+        a.flyLeg++;
+        a.dhT = 0;
+        if (a.flyLeg < DH_FLY_LEGS) {
+          a.legWait = DH_LEG_WAIT;
+          a.flyTarget = null;
+        } else if (turrets.length > 0) {
+          a.dhPhase = 'possess'; a.vulnerable = false;
+          a.possTarget = dhFarthestTurret();
+          a.possStart = {x: a.x, y: a.y};
+          a.trailAcc = 0;
+        } else {
+          a.dhPhase = 'shoot'; a.dhT = 0; a.shootCool = 0.6;
+          a.hoverT = 0; a.hoverBase = {x: a.x, y: a.y};
+        }
+      }
+    }
+  } else if (a.dhPhase === 'possess') {
+    a.vulnerable = false;
+    if (!a.possTarget || turrets.indexOf(a.possTarget) < 0) {
+      if (turrets.length > 0) {
+        a.possTarget = dhFarthestTurret();
+        a.possStart = {x: a.x, y: a.y};
+        a.dhT = 0;
+      } else {
+        a.dhPhase = 'shoot'; a.dhT = 0; a.shootCool = 0.6;
+        a.hoverT = 0; a.hoverBase = {x: a.x, y: a.y};
+      }
+    }
+    if (a.dhPhase === 'possess' && a.possTarget) {
+      const s = a.possTarget;
+      const tx = s.c + 0.5, ty = s.r + 0.5;
+      const dur = 0.6;
+      const p = easeInCubic(clamp01(a.dhT / dur));
+      a.x = lerp(a.possStart.x, tx, p);
+      a.y = lerp(a.possStart.y, ty, p);
+      sc *= (1 - 0.85 * p);   // shrink while zipping
+      a.trailAcc += dt;
+      while (a.trailAcc > 0.05) { a.trailAcc -= 0.05; burst(cellX(a.x), cellY(a.y), '#3d0000', 0.5); }
+      if (a.dhT >= dur) {
+        const px = cellX(a.x), py = cellY(a.y);
+        burst(px, py, '#8b0000', 2.4);
+        burst(px, py, '#ff2140', 1.2);
+        shockRing(px, py, 2.2 * CELL, '#8b0000', 0.5);
+        SFX.play('mine');
+        destroyStruct(a.possTarget);      // the turret explodes
+        const gd = Math.hypot(a.x - hx, a.y - hy) || 1;
+        a.glideDir = {x: (a.x - hx) / gd, y: (a.y - hy) / gd};   // backwards = away from heart
+        a.glideDist = 0;
+        a.turretHp = DARKHEART_TURRET_HP;
+        a.dhPhase = 'turretGlide'; a.dhT = 0;
+      }
+    }
+  } else if (a.dhPhase === 'turretGlide') {
+    a.vulnerable = false;
+    sc = 1;
+    const step = 2 * dt;
+    a.x = clamp(a.x + a.glideDir.x * step, 0.5, GRID_N - 0.5);
+    a.y = clamp(a.y + a.glideDir.y * step, 0.5, GRID_N - 0.5);
+    a.glideDist += step;
+    if (a.glideDist >= 2) { a.dhPhase = 'turretShoot'; a.dhT = 0; a.shootCool = 0.8; }
+  } else if (a.dhPhase === 'turretShoot') {
+    a.vulnerable = false;
+    sc = 1;
+    a.heading = Math.atan2(hy - a.y, hx - a.x);
+    if (a.shootCool <= 0) { fireDarkHeartShot(a.x, a.y); a.shootCool = DH_SHOT_RATE; }
+  } else if (a.dhPhase === 'emerge') {
+    a.vulnerable = false;
+    const p = easeOutCubic(clamp01(a.dhT / 0.7));
+    sc = (0.15 + 0.85 * p) * (1 + PULSE_AMP * beat);
+    if (p >= 1) {
+      a.dhPhase = 'fly'; a.dhT = 0; a.flyLeg = 0; a.legWait = 0;
+      a.flyTarget = dhRandomPoint();
+      a.vulnerable = true;
+    }
+  } else if (a.dhPhase === 'shoot') {
+    // no turrets left: hover and fire black hearts itself
+    a.vulnerable = true;
+    a.hoverT += dt;
+    a.x = clamp(a.hoverBase.x + Math.cos(a.hoverT * 0.9) * 0.35, DARKHEART_RADIUS, GRID_N - DARKHEART_RADIUS);
+    a.y = clamp(a.hoverBase.y + Math.sin(a.hoverT * 1.3) * 0.25, DARKHEART_RADIUS, GRID_N - DARKHEART_RADIUS);
+    if (a.shootCool <= 0) { fireDarkHeartShot(a.x, a.y); a.shootCool = DH_SHOT_RATE * 0.8; }
+    if (a.dhT > 8) { a.dhPhase = 'fly'; a.dhT = 0; a.flyLeg = 0; a.legWait = 0; a.flyTarget = dhRandomPoint(); }
+  }
+
+  const isTurretForm = a.dhPhase === 'turretGlide' || a.dhPhase === 'turretShoot';
+  a.art.heartG.setAttribute('opacity', isTurretForm ? 0 : 1);
+  a.art.turretG.setAttribute('opacity', isTurretForm ? 1 : 0);
+  if (isTurretForm) {
+    const aim = Math.atan2(hy - a.y, hx - a.x);
+    a.art.turretRot.setAttribute('transform', `rotate(${(aim * 180 / Math.PI).toFixed(1)})`);
+  } else {
+    a.art.halo.setAttribute('opacity', (0.2 + 0.3 * beat).toFixed(3));
+  }
+  if (a.flash > 0) sc *= 1.05;
+  a.art.g.setAttribute('transform', `translate(${cellX(a.x)} ${cellY(a.y)}) scale(${CELL * sc})`);
+  if (a.art.flashEl) a.art.flashEl.setAttribute('opacity', a.flash > 0 ? String(0.35 * (a.flash / 0.15)) : '0');
+  return false;
+}
+
+function fireDarkHeartShot(x, y) {
+  const tx = HEART.x + 0.5, ty = HEART.y + 0.5;
+  const d = Math.hypot(tx - x, ty - y) || 1;
+  const dx = (tx - x) / d, dy = (ty - y) / d;
+  const g = el('g', {}, bulletG);
+  el('path', {d: HEART_D, fill: '#0a0a0a', stroke: '#5c0000', 'stroke-width': 4}, g);
+  dhShots.push({x, y, dx, dy, hp: DARKHEART_SHOT_HP, el: g, frozen: 0, rot: Math.random() * 360});
+  SFX.play('jumperShot');
+}
+
+function updateDarkHeartShots(dt) {
+  const hx = HEART.x + 0.5, hy = HEART.y + 0.5;
+  for (let i = dhShots.length - 1; i >= 0; i--) {
+    const s = dhShots[i];
+    if (s.frozen > 0) s.frozen -= dt;
+    const step = DH_SHOT_SPEED * dt * (s.frozen > 0 ? 0.34 : 1);
+    s.x += s.dx * step; s.y += s.dy * step;
+    s.rot += DH_SHOT_SPIN * dt;
+    let dead = false;
+    if (Math.hypot(hx - s.x, hy - s.y) < 0.35) {
+      hurtHeart(CFG.HEART_HP * 0.08);
+      heartShake = 0.2;
+      burst(HEART_CELL_PX.x, HEART_CELL_PX.y, '#3d0000', 1.0);
+      shockRing(HEART_CELL_PX.x, HEART_CELL_PX.y, CELL * 1.2, '#8b0000', 0.4);
+      dead = true;
+    }
+    if (!dead) {
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.hypot(b.x - s.x, b.y - s.y) < 0.45) {
+          s.hp -= b.dmg;
+          bulletHitFlicker(cellX(s.x), cellY(s.y));
+          b.el.remove(); bullets.splice(j, 1);
+          if (s.hp <= 0) {
+            burst(cellX(s.x), cellY(s.y), '#5c0000', 1.2);
+            shockRing(cellX(s.x), cellY(s.y), CELL * 0.8, '#8b0000', 0.3);
+            dead = true;
+          }
+          break;
+        }
+      }
+    }
+    if (!dead && (s.x < -2 || s.x > GRID_N + 2 || s.y < -2 || s.y > GRID_N + 2)) dead = true;
+    if (dead) { s.el.remove(); dhShots.splice(i, 1); continue; }
+    s.el.querySelector('path').setAttribute('stroke', s.frozen > 0 ? '#0288d1' : '#5c0000');
+    s.el.setAttribute('transform', `translate(${cellX(s.x)} ${cellY(s.y)}) rotate(${s.rot.toFixed(1)}) scale(${0.34 * CELL / 56})`);
+  }
+}
 function triggerWinScreen() { phase = 'win'; winT = 0; hideTooltip(); }
 function showWinScreen(score) {
   goScreen.setAttribute('opacity', 1); goTitle.textContent = ''; goScore.textContent = ''; goBtn.textContent = ''; goLetters = [];
@@ -685,12 +1024,12 @@ function showWinScreen(score) {
 const BEAT=0.9,PULSE_AMP=0.075;
 function hb(t){const p=(((t%BEAT)+BEAT)%BEAT)/BEAT;const g=(c,w)=>Math.exp(-((p-c)*(p-c))/(2*w*w));return g(0.10,0.05)+0.55*g(0.34,0.065);}
 const svg=$('scene'),bg=$('bg'),world=$('world'),gridG=$('grid'),borderG=$('borderG'),heartG=$('heartG'),heartP=$('heart'),haloP=$('halo'),
-  titleG=$('title'),btn=$('btn'),bannerG=$('bannerG'),structG=$('structG'),gateG=$('gateG'),
-  ghostG=$('ghostG'),alienG=$('alienG'),bulletG=$('bulletG'),darkG=$('darkG'),projG=$('projG'),fxG=$('fxG'),
-  hsGhostG=$('hsGhostG'),choicesG=$('choicesG'),instrG=$('instrG'),hudG=$('hudG'),bossHudG=$('bossHudG'),toastG=$('toastG'),
-  tooltipG=$('tooltipG'),hoverG=$('hoverG'),hoverRect=hoverG.firstChild,selRing=$('selRing'),fadeRect=$('fade'),
-  heartBreakG=$('heartBreakG'),goScreen=$('goScreen'),goTitle=$('goTitle'),goScore=$('goScore'),goBtn=$('goBtn'),
-  upgradeContainersG=$('upgradeContainersG'),turretPoolG=$('turretPoolG');
+titleG=$('title'),btn=$('btn'),bannerG=$('bannerG'),structG=$('structG'),gateG=$('gateG'),
+ghostG=$('ghostG'),alienG=$('alienG'),bulletG=$('bulletG'),darkG=$('darkG'),projG=$('projG'),fxG=$('fxG'),
+hsGhostG=$('hsGhostG'),choicesG=$('choicesG'),instrG=$('instrG'),hudG=$('hudG'),bossHudG=$('bossHudG'),toastG=$('toastG'),
+tooltipG=$('tooltipG'),hoverG=$('hoverG'),hoverRect=hoverG.firstChild,selRing=$('selRing'),fadeRect=$('fade'),
+heartBreakG=$('heartBreakG'),goScreen=$('goScreen'),goTitle=$('goTitle'),goScore=$('goScore'),goBtn=$('goBtn'),
+upgradeContainersG=$('upgradeContainersG'),turretPoolG=$('turretPoolG');
 heartP.setAttribute('d',HEART_D);haloP.setAttribute('d',HEART_D);
 let W=0,H=0;const view={k:1,ox:0,oy:0};
 function fitViewport(){W=innerWidth;H=innerHeight;bg.setAttribute('width',W);bg.setAttribute('height',H);fadeRect.setAttribute('width',W);fadeRect.setAttribute('height',H);view.k=Math.min(W,H)/D;view.ox=(W-D*view.k)/2;view.oy=(H-D*view.k)/2;world.setAttribute('transform',`translate(${view.ox} ${view.oy}) scale(${view.k})`);}
@@ -771,9 +1110,9 @@ function drawTurretPoolHUD(){
 
   const iconSize=24,txtScale=0.9,gap=26;
   const items=entries.map(type=>{
-    const txt=buildText('x'+turretPool[type],txtScale,2,'#ff2140');
-    return{type,txt,w:iconSize+6+txt.w};
-  });
+      const txt=buildText('x'+turretPool[type],txtScale,2,'#ff2140');
+      return{type,txt,w:iconSize+6+txt.w};
+    });
   const totalW=items.reduce((s,it)=>s+it.w,0)+gap*(items.length-1);
   let curX=D/2-totalW/2;
   const baseY=GY0+GRID_SIDE+48;
@@ -820,8 +1159,8 @@ function spawnUpgradeContainers(){
     [base[i],base[j]]=[base[j],base[i]];
   }
   base.forEach((t,i)=>{
-    chestRewards[i%chestRewards.length].push(t);
-  });
+      chestRewards[i%chestRewards.length].push(t);
+    });
 
   for(const arr of chestRewards){
     while(arr.length<3){
@@ -835,16 +1174,16 @@ function spawnUpgradeContainers(){
   }
 
   UPGRADE_CELLS.forEach((c,idx)=>{
-    const rewards=chestRewards[idx];
-    const g=el('g',{transform:`translate(${cellX(c.x)} ${cellY(c.y)})`},upgradeContainersG);
-    const s=CELL;
-    el('rect',{x:s*0.1,y:s*0.4,width:s*0.8,height:s*0.5,fill:'#6d4c41',stroke:'#3e2723','stroke-width':2},g);
-    el('path',{d:`M${s*0.1} ${s*0.4} Q${s*0.5} ${s*0.1} ${s*0.9} ${s*0.4} Z`,fill:'#8d6e63',stroke:'#3e2723','stroke-width':2},g);
-    el('rect',{x:s*0.3,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
-    el('rect',{x:s*0.62,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
-    el('circle',{cx:s*0.5,cy:s*0.45,r:s*0.06,fill:'#ffca28',stroke:'#3e2723','stroke-width':1.5},g);
-    upgradeContainers.push({cell:c,el:g,collected:false,rewards,mode:'pool'});
-  });
+      const rewards=chestRewards[idx];
+      const g=el('g',{transform:`translate(${cellX(c.x)} ${cellY(c.y)})`},upgradeContainersG);
+      const s=CELL;
+      el('rect',{x:s*0.1,y:s*0.4,width:s*0.8,height:s*0.5,fill:'#6d4c41',stroke:'#3e2723','stroke-width':2},g);
+      el('path',{d:`M${s*0.1} ${s*0.4} Q${s*0.5} ${s*0.1} ${s*0.9} ${s*0.4} Z`,fill:'#8d6e63',stroke:'#3e2723','stroke-width':2},g);
+      el('rect',{x:s*0.3,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
+      el('rect',{x:s*0.62,y:s*0.4,width:s*0.08,height:s*0.5,fill:'#ffca28',stroke:'#3e2723','stroke-width':1},g);
+      el('circle',{cx:s*0.5,cy:s*0.45,r:s*0.06,fill:'#ffca28',stroke:'#3e2723','stroke-width':1.5},g);
+      upgradeContainers.push({cell:c,el:g,collected:false,rewards,mode:'pool'});
+    });
 }
 
 function checkUpgradeCollection(r,c){
@@ -1054,6 +1393,18 @@ function turretHasTarget(s){
   return false;
 }
 
+function flameHasProjTarget(cx, cy, range, angle) {
+  for (const sh of dhShots) {
+    const dx = sh.x - cx, dy = sh.y - cy;
+    if (Math.hypot(dx, dy) <= range && Math.abs(angNorm(Math.atan2(dy, dx) - angle)) < 0.4) return true;
+  }
+  for (const cb of tankCannonballs) {
+    const dx = cb.x - cx, dy = cb.y - cy;
+    if (Math.hypot(dx, dy) <= range && Math.abs(angNorm(Math.atan2(dy, dx) - angle)) < 0.4) return true;
+  }
+  return false;
+}
+
 function explodeMine(s){
   const cx=s.c+0.5,cy=s.r+0.5;
   const px=cellX(cx),py=cellY(cy);
@@ -1071,7 +1422,7 @@ function explodeMine(s){
 
   const mineLevel=turretLevels.MINE;
   for(const a of aliens){
-    if(a.state==='dying'||a.alienType==='boss')continue;
+    if(a.state==='dying'||a.alienType==='boss'||a.alienType==='darkboss'||a.alienType==='darkheart')continue;
     if(Math.hypot(a.x-cx,a.y-cy)<=CFG.STUN_RADIUS){
       a.stunned=CFG.STUN_DURATION;
       if(mineLevel>=2)a.postStunFreeze=2;
@@ -1079,7 +1430,7 @@ function explodeMine(s){
   }
   if(mineLevel>=3){
     for(const a of aliens){
-      if(a.state==='dying'||a.alienType==='boss')continue;
+      if(a.state==='dying'||a.alienType==='boss'||a.alienType==='darkboss'||a.alienType==='darkheart')continue;
       a.stunned=Math.max(a.stunned,1);
     }
   }
@@ -1125,15 +1476,25 @@ function drawHeartshotsHUD(){
 }
 function updateHSGhost(){hsGhostG.textContent='';if(phase!=='attack'||!selection||selection.kind!=='heart'||heartshots<1){hsGhostG.setAttribute('opacity',0);return;}hsGhostG.setAttribute('opacity',1);const a=hsAnchorCell(mouse.x,mouse.y);if(!a)return;for(let dy=0;dy<HS_SIZE;dy++)for(let dx=0;dx<HS_SIZE;dx++){const cx=a.x+dx,cy=a.y+dy;if(!inGrid({x:cx,y:cy}))continue;const px=cellX(cx)+CELL/2,py=cellY(cy)+CELL/2;const hg=el('g',{transform:`translate(${px} ${py}) scale(${CELL*0.6/56})`,opacity:0.4},hsGhostG);el('path',{d:HEART_D,fill:'#ff2140',stroke:'#d40f33','stroke-width':1.5},hg);}}
 function launchHeartshot(ax,ay){if(heartshots<1)return;heartshots=Math.max(0,heartshots-1);drawHeartshotsHUD();selection=null;heartSelectCool=0.1;const destX=cellX(ax)+HS_SIZE*CELL/2,destY=cellY(ay)+HS_SIZE*CELL/2;const pg=el('g',{},projG);const inner=el('g',{transform:`scale(${CELL*0.6/56})`},pg);el('path',{d:HEART_D,fill:'#ff2140',stroke:'#d40f33','stroke-width':2},inner);projectiles.push({el:pg,inner,srcX:HEART_CELL_PX.x,srcY:HEART_CELL_PX.y,destX,destY,t:0,dur:CFG.HEARTSHOT_FLIGHT,ax,ay});SFX.play('heartshot');}
-function updateProjectiles(dt){for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.t+=dt;const prog=clamp01(p.t/p.dur),ep=easeInOutCubic(prog);p.el.setAttribute('transform',`translate(${lerp(p.srcX,p.destX,ep)} ${lerp(p.srcY,p.destY,ep)})`);p.inner.setAttribute('transform',`scale(${CELL*0.6/56}) rotate(${p.t*360})`);if(prog>=1){burst(p.destX,p.destY,'#ff2140',2.0);shockRing(p.destX,p.destY,HS_SIZE*CELL*0.7,'#ff2140',0.6);SFX.play('mine');for(let dy=0;dy<HS_SIZE;dy++)for(let dx=0;dx<HS_SIZE;dx++){const bc={x:p.ax+dx,y:p.ay+dy};if(!inGrid(bc))continue;const s=structAt(bc);if(s){showDmgNumber(cellX(bc.x)+CELL/2,cellY(bc.y),Math.ceil(s.hp));s.hp=0;destroyStruct(s);}for(const a of aliens){if(a.state==='dying'||a.alienType==='boss')continue;if(Math.round(a.x-0.5)===bc.x&&Math.round(a.y-0.5)===bc.y)damageAlien(a,CFG.HEARTSHOT_DMG);}}
+function updateProjectiles(dt){for(let i=projectiles.length-1;i>=0;i--){const p=projectiles[i];p.t+=dt;const prog=clamp01(p.t/p.dur),ep=easeInOutCubic(prog);p.el.setAttribute('transform',`translate(${lerp(p.srcX,p.destX,ep)} ${lerp(p.srcY,p.destY,ep)})`);p.inner.setAttribute('transform',`scale(${CELL*0.6/56}) rotate(${p.t*360})`);if(prog>=1){burst(p.destX,p.destY,'#ff2140',2.0);shockRing(p.destX,p.destY,HS_SIZE*CELL*0.7,'#ff2140',0.6);SFX.play('mine');for(let dy=0;dy<HS_SIZE;dy++)for(let dx=0;dx<HS_SIZE;dx++){const bc={x:p.ax+dx,y:p.ay+dy};if(!inGrid(bc))continue;const s=structAt(bc);if(s){showDmgNumber(cellX(bc.x)+CELL/2,cellY(bc.y),Math.ceil(s.hp));s.hp=0;destroyStruct(s);}for(const a of aliens){
+          if(a.state==='dying'||a.alienType==='boss'||a.alienType==='tank'||a.alienType==='darkboss'||a.alienType==='darkheart')continue;
+          if(Math.round(a.x-0.5)===bc.x&&Math.round(a.y-0.5)===bc.y)damageAlien(a,CFG.HEARTSHOT_DMG);}}
       const bx0=p.ax,by0=p.ay,bx1=p.ax+HS_SIZE,by1=p.ay+HS_SIZE;
-      for(const a of aliens){
-        if(a.state!=='dying'&&a.alienType==='boss'){
-          const nx=clamp(a.x,bx0,bx1),ny=clamp(a.y,by0,by1);
-          const dx=a.x-nx,dy=a.y-ny;
-          if(dx*dx+dy*dy <= BOSS_RADIUS*BOSS_RADIUS){
-            damageAlien(a,CFG.HEARTSHOT_DMG);
+      for (const a of aliens) {
+        if (a.state !== 'dying' && (a.alienType === 'boss' || a.alienType === 'tank' || a.alienType === 'darkboss' || a.alienType === 'darkheart')) {
+          const nx = clamp(a.x, bx0, bx1), ny = clamp(a.y, by0, by1);
+          const dx = a.x - nx, dy = a.y - ny;
+          const br = a.alienType === 'darkheart' ? DARKHEART_RADIUS : BOSS_RADIUS;
+          if (dx * dx + dy * dy <= br * br) {
+            damageAlien(a, CFG.HEARTSHOT_DMG);
           }
+        }
+      }
+      for (let si = dhShots.length - 1; si >= 0; si--) {
+        const sh = dhShots[si];
+        if (sh.x >= bx0 && sh.x <= bx1 && sh.y >= by0 && sh.y <= by1) {
+          burst(cellX(sh.x), cellY(sh.y), '#5c0000', 1.0);
+          sh.el.remove(); dhShots.splice(si, 1);
         }
       }
       p.el.remove();projectiles.splice(i,1);}}}
@@ -1160,12 +1521,12 @@ function drawChoiceCells(c){
   const maxY=Math.max(...c.cells.map(cc=>cc[1]))+1;
   const ux=-(maxX*cp)/2,uy=-(maxY*cp)/2;
   c.cells.forEach((cc,i)=>{
-    const cg=el('g',{transform:`translate(${ux+cc[0]*cp} ${uy+cc[1]*cp})`},c.content);
-    const type=c.types?c.types[i]:'WALL';
-    const tt=c.turretTypes?c.turretTypes[i]:null;
-    if(type==='TURRET')buildTurretArt(cg,tt||'BASIC',cp);
-    else buildCellArt(cg,'WALL',cp);
-  });
+      const cg=el('g',{transform:`translate(${ux+cc[0]*cp} ${uy+cc[1]*cp})`},c.content);
+      const type=c.types?c.types[i]:'WALL';
+      const tt=c.turretTypes?c.turretTypes[i]:null;
+      if(type==='TURRET')buildTurretArt(cg,tt||'BASIC',cp);
+      else buildCellArt(cg,'WALL',cp);
+    });
 }
 function rotatePieceData(cells,types,turretTypes,dir){
   const items=cells.map((c,i)=>({x:c[0],y:c[1],type:types?types[i]:'WALL',turretType:turretTypes?turretTypes[i]:null}));
@@ -1387,8 +1748,8 @@ function getAlienTypeForWave(wave,allowRare){
   const types=['normal'];
   const weights=[3];
   if(wave>=3){types.push('intermediate');weights.push(2);}
-  if(wave>=2&&allowRare){types.push('jumper');weights.push(2);}
-  if(wave>=4&&allowRare){types.push('flyer');weights.push(1);}
+  if(wave>=2&&allowRare){types.push(wave>=10?'darkhopper':'jumper');weights.push(2);}
+  if(wave>=4&&allowRare){types.push(wave>=12?'darkflyer':'flyer');weights.push(1);}
   if(wave>=6&&allowRare){types.push('strong');weights.push(1);}
   const total=weights.reduce((a,b)=>a+b,0);
   let r=Math.random()*total;
@@ -1421,6 +1782,7 @@ function startAttack(){
   if(isBossWave && G.gates.length>=3){
     const gt=G.gates[2];
     gt.boss=true;
+    if(G.wave===10)gt.cell={x:1,y:1};
     gt.size=3;
     gt.spawnQueue=[];
     gt.el.remove();
@@ -1449,7 +1811,10 @@ function updateGates(dt,t){
     const gt=G.gates[gi];
     if(!gt.opened&&at>=gt.openTime){gt.opened=true;}
     if(gt.boss&&gt.opened&&!gt.bossSpawned&&at>=gt.openTime+0.2){
-      if (G.wave === 10) spawnTankBoss(gt.cell); else spawnBoss(gt.cell);
+      if (G.wave === 10) spawnTankBoss(gt.cell);
+      else if (G.wave === 15) spawnDarkBoss(gt.cell);
+      else if (G.wave === 20) spawnDarkHeartBoss(gt.cell);
+      else spawnBoss(gt.cell);
       gt.bossSpawned=true;
       G.spawned++;
     }
@@ -1570,18 +1935,82 @@ function makeBossArt(g){
   const eyeClosedEl=el('path',{d:`M ${-BOSS_RADIUS*0.28} 0 Q 0 ${BOSS_RADIUS*0.14} ${BOSS_RADIUS*0.28} 0`,fill:'none',stroke:'#111','stroke-width':0.1,'stroke-linecap':'round'},eyeG);
   return{g,body,lightsG,eyeOpenEl,eyeClosedEl,bottom:BOSS_RADIUS};
 }
-
+function makeDarkBossArt(g){
+  const spikesG=el('g',{},g);
+  for(let i=0;i<12;i++){
+    const ang=i*Math.PI/6;
+    const x1=Math.cos(ang)*BOSS_RADIUS*0.92,y1=Math.sin(ang)*BOSS_RADIUS*0.92;
+    const x2=Math.cos(ang)*BOSS_RADIUS*1.35,y2=Math.sin(ang)*BOSS_RADIUS*1.35;
+    const x3=Math.cos(ang+0.18)*BOSS_RADIUS*0.92,y3=Math.sin(ang+0.18)*BOSS_RADIUS*0.92;
+    el('polygon',{points:`${x1},${y1} ${x2},${y2} ${x3},${y3}`,fill:'#8b0000',stroke:'#3d0000','stroke-width':0.03},spikesG);
+  }
+  const body=el('circle',{r:BOSS_RADIUS,fill:'#2d0a0a',stroke:'#1a0505','stroke-width':0.1},g);
+  el('circle',{r:BOSS_RADIUS*0.52,fill:'#4a1010',stroke:'#1a0505','stroke-width':0.07},g);
+  const lightsG=el('g',{},g);
+  for(let i=0;i<8;i++){
+    const ang=i*Math.PI/4;
+    el('circle',{cx:Math.cos(ang)*BOSS_RADIUS*0.82,cy:Math.sin(ang)*BOSS_RADIUS*0.82,r:BOSS_RADIUS*0.09,fill:'#ff0000',stroke:'#8b0000','stroke-width':0.03},lightsG);
+  }
+  const eyeG=el('g',{},g);
+  const eyeOpenEl=el('g',{opacity:0},eyeG);
+  el('ellipse',{cx:0,cy:0,rx:BOSS_RADIUS*0.3,ry:BOSS_RADIUS*0.16,fill:'#ff2222',stroke:'#8b0000','stroke-width':0.06},eyeOpenEl);
+  el('circle',{cx:0,cy:0,r:BOSS_RADIUS*0.09,fill:'#ff0000'},eyeOpenEl);
+  const eyeClosedEl=el('path',{d:`M ${-BOSS_RADIUS*0.28} 0 Q 0 ${BOSS_RADIUS*0.14} ${BOSS_RADIUS*0.28} 0`,fill:'none',stroke:'#ff0000','stroke-width':0.1,'stroke-linecap':'round'},eyeG);
+  return{g,body,lightsG,eyeOpenEl,eyeClosedEl,spikesG,bottom:BOSS_RADIUS};
+}
+function makeDarkHopperArt(g){
+  const body=el('circle',{r:0.28,fill:'#c62828',stroke:'#4a0e0e','stroke-width':0.06},g);
+  const legsLand=el('g',{stroke:'#4a0e0e','stroke-width':0.05,'stroke-linecap':'round',fill:'none'},g);
+  for(const s of[-1,1]){
+    el('polyline',{points:`${0.15*s},0.06 ${0.34*s},-0.06 ${0.40*s},0.40`},legsLand);
+    el('polyline',{points:`${0.08*s},0.15 ${0.20*s},0.08 ${0.26*s},0.42`},legsLand);
+  }
+  const legsJump=el('g',{stroke:'#4a0e0e','stroke-width':0.05,'stroke-linecap':'round',fill:'none',opacity:0},g);
+  for(const s of[-1,1]){
+    el('polyline',{points:`${0.18*s},0.05 ${0.36*s},-0.07 ${0.40*s},0.12`},legsJump);
+    el('polyline',{points:`${0.09*s},0.15 ${0.22*s},0.05 ${0.27*s},0.20`},legsJump);
+  }
+  el('circle',{cx:-0.10,cy:-0.08,r:0.055,fill:'#ffeb3b'},g);
+  el('circle',{cx:0,cy:-0.14,r:0.055,fill:'#ffeb3b'},g);
+  el('circle',{cx:0.10,cy:-0.08,r:0.055,fill:'#ffeb3b'},g);
+  el('circle',{cx:-0.10,cy:-0.08,r:0.025,fill:'#111'},g);
+  el('circle',{cx:0,cy:-0.14,r:0.025,fill:'#111'},g);
+  el('circle',{cx:0.10,cy:-0.08,r:0.025,fill:'#111'},g);
+  return{g,body,legsLand,legsJump,bottom:0.42};
+}
+function makeDarkFlyerArt(g){
+  const rotG=el('g',{},g);
+  const body=el('ellipse',{cx:0,cy:0,rx:0.24,ry:0.16,fill:'#5c1a1a',stroke:'#2b0d0d','stroke-width':0.05},rotG);
+  const wings=el('g',{},rotG);
+  el('ellipse',{cx:-0.13,cy:-0.19,rx:0.21,ry:0.09,fill:'#7a2020',stroke:'#2b0d0d','stroke-width':0.035,transform:'rotate(-25 -0.13 -0.19)'},wings);
+  el('ellipse',{cx:-0.13,cy:0.19,rx:0.21,ry:0.09,fill:'#7a2020',stroke:'#2b0d0d','stroke-width':0.035,transform:'rotate(25 -0.13 0.19)'},wings);
+  // three eyes
+  el('circle',{cx:0.05,cy:-0.07,r:0.05,fill:'#ffeb3b'},rotG);
+  el('circle',{cx:0.14,cy:-0.02,r:0.045,fill:'#ffeb3b'},rotG);
+  el('circle',{cx:0.05,cy:0.07,r:0.05,fill:'#ffeb3b'},rotG);
+  el('circle',{cx:0.05,cy:-0.07,r:0.022,fill:'#111'},rotG);
+  el('circle',{cx:0.14,cy:-0.02,r:0.02,fill:'#111'},rotG);
+  el('circle',{cx:0.05,cy:0.07,r:0.022,fill:'#111'},rotG);
+  // fanged beak
+  el('polygon',{points:'0.24,0 0.12,-0.06 0.15,0 0.12,0.06',fill:'#e9c46a',stroke:'#8b6d1f','stroke-width':0.02},rotG);
+  return{g,body,wings,rotG,bottom:0.21};
+}
 function makeAlienArt(type){
   const g=document.createElementNS(NS,'g');
   let artData;
   if(type==='jumper')artData=makeJumperArt(g);
+  else if(type==='darkhopper')artData=makeDarkHopperArt(g);
   else if(type==='strong')artData=makeStrongArt(g);
   else if(type==='flyer')artData=makeFlyerArt(g);
+  else if(type==='darkflyer')artData=makeDarkFlyerArt(g);
   else if(type==='intermediate')artData=makeIntermediateArt(g);
-  else if(type==='boss')artData=makeBossArt(g);else if(type==='tank')artData=makeTankArt(g);
+  else if(type==='boss')artData=makeBossArt(g);
+  else if(type==='darkboss')artData=makeDarkBossArt(g);
+  else if(type==='darkheart')artData=makeDarkHeartArt(g);
+  else if(type==='tank')artData=makeTankArt(g);
   else artData=makeNormalArt(g);
+  const flashR=(type==='boss'||type==='darkboss')?BOSS_RADIUS+0.1:(type==='darkheart')?DARKHEART_RADIUS:0.35;
 
-  const flashR=type==='boss'?BOSS_RADIUS+0.1:0.35;
   const flashEl=el('circle',{cx:0,cy:0,r:flashR,fill:'#fff',opacity:0,'pointer-events':'none'},g);
   const hpGroup=type==='tank'?null:el('g',{},g);
   const stunG=el('g',{opacity:0,'pointer-events':'none'},g);
@@ -1619,28 +2048,28 @@ function updateAlienHPDisplay(a){
 function spawnAlien(cell,type='normal'){
   const baseHp=ALIEN_HP[type]!==undefined?ALIEN_HP[type]:CFG.NORMAL_HP;
   aliens.push({
-    x:cell.x+0.5,y:cell.y+0.5,
-    cell:{...cell},
-    state:'spawn',t:0,aliveTime:0,
-    speed:CFG.ALIEN_SPEED*(0.92+Math.random()*0.16),
-    art:makeAlienArt(type),
-    walkT:Math.random()*6,
-    from:null,to:null,mt:0,
-    target:null,flash:0,wait:0,lunge:0,
-    path:null,pathIdx:0,distTraveled:0,
-    breach:false,
-    hp:baseHp,maxHp:baseHp,
-    frozen:0,
-    stunned:0,
-    postStunFreeze:0,
-    alienType:type,
-    stepsSinceHPBoost:0,
-    jumpT:0,
-    prepareT:0,
-    pendingTo:null,
-    shootCool:0,
-    heading:Math.atan2(HEART.y+0.5-(cell.y+0.5),HEART.x+0.5-(cell.x+0.5)),
-  });
+      x:cell.x+0.5,y:cell.y+0.5,
+      cell:{...cell},
+      state:'spawn',t:0,aliveTime:0,
+      speed:CFG.ALIEN_SPEED*(0.92+Math.random()*0.16),
+      art:makeAlienArt(type),
+      walkT:Math.random()*6,
+      from:null,to:null,mt:0,
+      target:null,flash:0,wait:0,lunge:0,
+      path:null,pathIdx:0,distTraveled:0,
+      breach:false,
+      hp:baseHp,maxHp:baseHp,
+      frozen:0,
+      stunned:0,
+      postStunFreeze:0,
+      alienType:type,
+      stepsSinceHPBoost:0,
+      jumpT:0,
+      prepareT:0,
+      pendingTo:null,
+      shootCool:0,
+      heading:Math.atan2(HEART.y+0.5-(cell.y+0.5),HEART.x+0.5-(cell.x+0.5)),
+    });
 }
 
 function astar(start){const key=n=>n.x+','+n.y;const goal=n=>manh(n)===1;if(goal(start))return[start];const open=[{x:start.x,y:start.y,g:0,f:manh(start)}];const gS={},from={},closed={};gS[key(start)]=0;while(open.length){let bi=0;for(let i=1;i<open.length;i++)if(open[i].f<open[bi].f)bi=i;const cur=open.splice(bi,1)[0],ck=key(cur);if(closed[ck])continue;closed[ck]=1;if(goal(cur)){const path=[];let k=ck;while(k){const[px,py]=k.split(',').map(Number);path.unshift({x:px,y:py});k=from[k];}return path;}for(const n of neighborCells(cur)){if(!inGrid(n)||structAt(n)||(n.x===HEART.x&&n.y===HEART.y))continue;const nk=key(n);if(closed[nk])continue;const ng=cur.g+1;if(gS[nk]===undefined||ng<gS[nk]){gS[nk]=ng;from[nk]=ck;open.push({x:n.x,y:n.y,g:ng,f:ng+manh(n)});}}}return null;}
@@ -1739,11 +2168,11 @@ function decide(a){
     a.target={kind:'heart'};
     return;
   }
-  if(a.alienType==='jumper'){
+  if(a.alienType==='jumper'||a.alienType==='darkhopper'){
     decideJumper(a);
     return;
   }
-  if(a.alienType==='flyer'){
+  if(a.alienType==='flyer'||a.alienType==='darkflyer'){
     decideFlyer(a);
     return;
   }
@@ -1762,10 +2191,29 @@ function decide(a){
   }
 }
 function startStep(a,c){a.state='walk';a.from={...a.cell};a.to=c;a.mt=0;}
-function damageAlien(a,amt){
-  if(a.state==='dying')return false;
-  if(a.alienType==='boss'&&!a.vulnerable){
-    a.flash=0.1;
+function damageAlien(a, amt) {
+  if (a.state === 'dying') return false;
+  if (a.alienType === 'darkheart') {
+    if (a.dhPhase === 'turretGlide' || a.dhPhase === 'turretShoot') {
+      a.turretHp -= amt;
+      a.flash = 0.15;
+      if (a.turretHp <= 0) {
+        burst(cellX(a.x), cellY(a.y), '#8b0000', 2.0);
+        shockRing(cellX(a.x), cellY(a.y), 2 * CELL, '#8b0000', 0.5);
+        SFX.play('mine');
+        a.dhPhase = 'emerge'; a.dhT = 0; a.vulnerable = false;
+      }
+      return false;
+    }
+    if (!a.vulnerable) { a.flash = 0.1; return false; }
+    a.hp -= amt;
+    a.flash = 0.15;
+    drawBossMeter();
+    if (a.hp <= 0) { killAlien(a); return true; }
+    return false;
+  }
+  if ((a.alienType === 'boss' || a.alienType === 'darkboss') && !a.vulnerable) {
+    a.flash = 0.1;
     return false;
   }
   a.hp-=amt;
@@ -1812,26 +2260,26 @@ function spawnBoss(cell){
   const x=cx+dx/d*1.0,y=cy+dy/d*1.0;
   const bossHp=cheatMode?10:ALIEN_HP.boss;
   aliens.push({
-    x:x,y:y,
-    cell:{x:clamp(Math.floor(x),0,GRID_N-1),y:clamp(Math.floor(y),0,GRID_N-1)},
-    state:'bossEnter',t:0,aliveTime:0,
-    speed:0,
-    art:makeAlienArt('boss'),
-    walkT:0,
-    from:null,to:null,mt:0,
-    target:null,flash:0,wait:0,lunge:0,
-    path:null,pathIdx:0,distTraveled:0,
-    breach:false,
-    hp:bossHp,maxHp:bossHp,
-    frozen:0,stunned:0,postStunFreeze:0,
-    alienType:'boss',
-    shootCool:0,
-    bossPhase:'enter',bossT:0,spawnCount:0,
-    vulnerable:false,eyeOpen:false,
-    orbitAngle:Math.atan2(y-hy,x-hx),
-    radius:clamp(Math.hypot(x-hx,y-hy),5,8),
-    bobT:0,spin:0,heading:0,
-  });
+      x:x,y:y,
+      cell:{x:clamp(Math.floor(x),0,GRID_N-1),y:clamp(Math.floor(y),0,GRID_N-1)},
+      state:'bossEnter',t:0,aliveTime:0,
+      speed:0,
+      art:makeAlienArt('boss'),
+      walkT:0,
+      from:null,to:null,mt:0,
+      target:null,flash:0,wait:0,lunge:0,
+      path:null,pathIdx:0,distTraveled:0,
+      breach:false,
+      hp:bossHp,maxHp:bossHp,
+      frozen:0,stunned:0,postStunFreeze:0,
+      alienType:'boss',
+      shootCool:0,
+      bossPhase:'enter',bossT:0,spawnCount:0,
+      vulnerable:false,eyeOpen:false,
+      orbitAngle:Math.atan2(y-hy,x-hx),
+      radius:clamp(Math.hypot(x-hx,y-hy),5,8),
+      bobT:0,spin:0,heading:0,
+    });
   boss=aliens[aliens.length-1];
   drawBossMeter();
 }
@@ -1854,6 +2302,51 @@ function spawnBossFlyers(count,b){
     const sx=clamp(b.x+Math.cos(ang)*BOSS_RADIUS*0.9,0.5,GRID_N-0.5);
     const sy=clamp(b.y+Math.sin(ang)*BOSS_RADIUS*0.9,0.5,GRID_N-0.5);
     spawnFlyerAt(sx,sy,ang);
+  }
+}
+
+function spawnDarkBoss(cell){
+  const cx=cell.x+0.5,cy=cell.y+0.5;
+  const hx=HEART.x+0.5,hy=HEART.y+0.5;
+  const dx=hx-cx,dy=hy-cy;
+  const d=Math.hypot(dx,dy)||1;
+  const x=cx+dx/d*1.0,y=cy+dy/d*1.0;
+  const bossHp=cheatMode?10:ALIEN_HP.darkboss;
+  aliens.push({
+      x:x,y:y,
+      cell:{x:clamp(Math.floor(x),0,GRID_N-1),y:clamp(Math.floor(y),0,GRID_N-1)},
+      state:'bossEnter',t:0,aliveTime:0,
+      speed:0,
+      art:makeAlienArt('darkboss'),
+      walkT:0,
+      from:null,to:null,mt:0,
+      target:null,flash:0,wait:0,lunge:0,
+      path:null,pathIdx:0,distTraveled:0,
+      breach:false,
+      hp:bossHp,maxHp:bossHp,
+      frozen:0,stunned:0,postStunFreeze:0,
+      alienType:'darkboss',
+      shootCool:0,
+      bossPhase:'enter',bossT:0,spawnCount:0,
+      vulnerable:false,eyeOpen:false,
+      orbitAngle:Math.atan2(y-hy,x-hx),
+      radius:clamp(Math.hypot(x-hx,y-hy),5,8),
+      bobT:0,spin:0,heading:0,
+    });
+  boss=aliens[aliens.length-1];
+  drawBossMeter();
+}
+function spawnBossDarkHoppers(count,b){
+  const base=Math.atan2(HEART.y+0.5-b.y,HEART.x+0.5-b.x);
+  for(let i=0;i<count;i++){
+    const ang=base+i*Math.PI*2/Math.max(1,count);
+    const sx=clamp(b.x+Math.cos(ang)*BOSS_RADIUS*0.9,0.5,GRID_N-0.5);
+    const sy=clamp(b.y+Math.sin(ang)*BOSS_RADIUS*0.9,0.5,GRID_N-0.5);
+    const cell={x:clamp(Math.floor(sx),0,GRID_N-1),y:clamp(Math.floor(sy),0,GRID_N-1)};
+    spawnAlien(cell,'darkhopper');
+    const a=aliens[aliens.length-1];
+    a.x=sx;a.y=sy;
+    a.state='idle';a.wait=0.3;
   }
 }
 
@@ -1881,7 +2374,7 @@ function updateGreenHearts(dt){
         heartHp=Math.min(CFG.HEART_HP,heartHp+CFG.HEART_HP*0.15);
         heartShake=0.2;
         burst(HEART_CELL_PX.x,HEART_CELL_PX.y,'#39d353',2.0);
-                shockRing(HEART_CELL_PX.x,HEART_CELL_PX.y,2.5*CELL,'#39d353',0.5);
+        shockRing(HEART_CELL_PX.x,HEART_CELL_PX.y,2.5*CELL,'#39d353',0.5);
         if (bossesDefeated === 1) showToast(['UPGRADE: SECOND PIECE CHOICE']);
         else if (bossesDefeated === 2) { placementsPerWave = 4; showToast(['UPGRADE: 4 PIECES PER WAVE']); }
         else if (bossesDefeated === 3) { turretAdjacencyRemoved = true; showToast(['UPGRADE: TURRETS BUILD ADJACENT']); }
@@ -1951,7 +2444,8 @@ function updateBossAlien(a,dt,t){
       a.eyeOpen=true;
       a.vulnerable=true;
       a.spawnCount=(a.spawnCount||0)+1;
-      spawnBossFlyers(a.spawnCount,a);
+      if(a.alienType==='darkboss')spawnBossDarkHoppers(a.spawnCount,a);
+      else spawnBossFlyers(a.spawnCount,a);
     }
   }else if(a.bossPhase==='open'){
     a.eyeOpen=true;
@@ -2000,11 +2494,15 @@ function updateAliens(dt,t){
     const a=aliens[i];
 
     if(a.alienType==='tank'){
-     if(updateTankBoss(a,dt,t))aliens.splice(i,1);
-     continue;
+      if(updateTankBoss(a,dt,t))aliens.splice(i,1);
+      continue;
     }
-    if(a.alienType==='boss'){
+    if(a.alienType==='boss'||a.alienType==='darkboss'){
       if(updateBossAlien(a,dt,t))aliens.splice(i,1);
+      continue;
+    }
+    if (a.alienType === 'darkheart') {
+      if (updateDarkHeartBoss(a, dt, t)) aliens.splice(i, 1);
       continue;
     }
 
@@ -2020,7 +2518,7 @@ function updateAliens(dt,t){
     }
     if(a.shootCool>0)a.shootCool-=dt;
     const frozenMult=a.frozen>0?0.34:1;
-    const typeMult=a.alienType==='jumper'?CFG.JUMPER_SPEED_MULT:1;
+    const typeMult=(a.alienType==='jumper'||a.alienType==='darkhopper')?CFG.JUMPER_SPEED_MULT:1;
 
     const cols=ALIEN_COLORS[a.alienType]||ALIEN_COLORS.normal;
     if(a.art.body){
@@ -2146,12 +2644,12 @@ function updateAliens(dt,t){
       a.art.legsLand.setAttribute('opacity',air?0:1);
     }
 
-    if(a.alienType==='flyer'&&a.art.rotG){
+    if((a.alienType==='flyer'||a.alienType==='darkflyer')&&a.art.rotG){
       const hd=a.heading!==undefined?a.heading:0;
       a.art.rotG.setAttribute('transform',`rotate(${(hd*180/Math.PI).toFixed(1)})`);
     }
 
-    if(a.alienType==='flyer'&&a.art.wings){
+    if((a.alienType==='flyer'||a.alienType==='darkflyer')&&a.art.wings){
       const flapAngle=Math.sin(t*20)*25;
       a.art.wings.setAttribute('transform',`rotate(${flapAngle})`);
     }
@@ -2186,11 +2684,11 @@ function killAlien(a, purge=false){
   heartshots=Math.min(CFG.HEARTSHOT_MAX,heartshots+CFG.HEARTSHOT_GAIN);
   drawHeartshotsHUD();
 
-  if(a.alienType==='boss'||a.alienType==='tank'){
+  if(a.alienType==='boss'||a.alienType==='tank'||a.alienType==='darkboss'||a.alienType==='darkheart'){
     boss=null;
     drawBossMeter();
     bossesDefeated++;
-
+    aliensKilled += Math.ceil(heartHp) * bossesDefeated;
     killAllEnemiesExcept(a);
     destroyAllStructures();
 
@@ -2200,6 +2698,11 @@ function killAlien(a, purge=false){
 
     for(const b of ebullets)b.el.remove();
     ebullets.length=0;
+
+    for(const c of tankCannonballs)c.el.remove();
+    tankCannonballs.length=0;
+    for(const s of dhShots)s.el.remove();
+    dhShots.length=0;
 
     screenShake=2.0;
     a.boomAccum=0;
@@ -2211,8 +2714,7 @@ function killAlien(a, purge=false){
     return;
   }
 
-  const burstColor=a.alienType==='jumper'?'#9c27b0':a.alienType==='strong'?'#e53935':a.alienType==='flyer'?'#457b9d':a.alienType==='intermediate'?'#26a69a':'#39d353';
-  burst(cellX(a.x),cellY(a.y),burstColor,1.3);
+  const burstColor=a.alienType==='jumper'?'#9c27b0':a.alienType==='darkhopper'?'#c62828':a.alienType==='strong'?'#e53935':a.alienType==='darkflyer'?'#5c1a1a':a.alienType==='flyer'?'#457b9d':a.alienType==='intermediate'?'#26a69a':'#39d353';  burst(cellX(a.x),cellY(a.y),burstColor,1.3);
   shockRing(cellX(a.x),cellY(a.y),1.6*CELL,'#ff8c42',0.35);
 
   if(!purge){
@@ -2260,7 +2762,7 @@ function updateTurrets(dt){
 
     if(tt==='MINE'){
       for(const a of aliens){
-        if(a.state==='dying'||a.alienType==='boss')continue;
+        if(a.state==='dying'||a.alienType==='boss'||a.alienType==='darkboss'||a.alienType==='darkheart')continue;
         if(Math.hypot(a.x-cx,a.y-cy)<=CFG.MINE_TRIGGER){
           explodeMine(s);
           break;
@@ -2283,12 +2785,13 @@ function updateTurrets(dt){
     if((tt==='FREEZE'||tt==='FLAME')&&s.freezeEl){
       if(s.cool<=0){
         s.cool=0.08;
-        const hasTarget=turretHasTarget(s);
+        let hasTarget = turretHasTarget(s);
+        if (!hasTarget && tt === 'FLAME') hasTarget = flameHasProjTarget(cx, cy, range, s.angle);
         if(hasTarget){
           const nowMs=performance.now();
           if(!s.lastFreezeSfx || nowMs - s.lastFreezeSfx > 400) {
-             SFX.play(tt==='FREEZE'?'freeze':'flame');
-             s.lastFreezeSfx = nowMs;
+            SFX.play(tt==='FREEZE'?'freeze':'flame');
+            s.lastFreezeSfx = nowMs;
           }
           s.freezeEl.setAttribute('opacity',0.6);
 
@@ -2305,29 +2808,71 @@ function updateTurrets(dt){
 
           if(tt==='FREEZE'){
             for(const a of aliens){
-              if(a.state==='dying'||a.alienType==='boss')continue;
+              if(a.state==='dying'||a.alienType==='boss'||a.alienType==='darkboss'||a.alienType==='darkheart')continue;
               const dx=a.x-cx,dy=a.y-cy,dist=Math.hypot(dx,dy);
               if(dist>range)continue;
               const angToAlien=Math.atan2(dy,dx);
               const diff=Math.abs(angNorm(angToAlien-s.angle));
               if(diff<0.4){a.frozen=0.5;}
             }
-          }else{
-            if(s.flameDmgCool<=0){
-              let hitAny=false;
-              const flameDmg=turretLevels.FLAME>=3?2:1;
-              for(const a of aliens){
-                if(a.state==='dying'||a.alienType==='boss')continue;
-                const dx=a.x-cx,dy=a.y-cy,dist=Math.hypot(dx,dy);
-                if(dist>range)continue;
-                const angToAlien=Math.atan2(dy,dx);
-                const diff=Math.abs(angNorm(angToAlien-s.angle));
-                if(diff<0.4){
-                  damageAlien(a,flameDmg);
-                  hitAny=true;
+            for(const c of tankCannonballs){
+              const dx=c.x-cx,dy=c.y-cy,dist=Math.hypot(dx,dy);
+              if(dist>range)continue;
+              if(Math.abs(angNorm(Math.atan2(dy,dx)-s.angle))<0.4)c.frozen=Math.max(c.frozen,0.5);
+            }
+            for(const sh of dhShots){
+              const dx=sh.x-cx,dy=sh.y-cy,dist=Math.hypot(dx,dy);
+              if(dist>range)continue;
+              if(Math.abs(angNorm(Math.atan2(dy,dx)-s.angle))<0.4)sh.frozen=Math.max(sh.frozen,0.5);
+            }
+          } else {
+            if (s.flameDmgCool <= 0) {
+              let hitAny = false;
+              const flameDmg = turretLevels.FLAME >= 3 ? 2 : 1;
+              // aliens AND bosses (damageAlien handles vulnerability / turret-form routing)
+              for (const a of aliens) {
+                if (a.state === 'dying') continue;
+                const dx = a.x - cx, dy = a.y - cy, dist = Math.hypot(dx, dy);
+                const bigR = (a.alienType === 'darkheart') ? DARKHEART_RADIUS
+                           : (a.alienType === 'boss' || a.alienType === 'darkboss' || a.alienType === 'tank') ? BOSS_RADIUS : 0;
+                if (dist - bigR > range) continue;
+                const angToAlien = Math.atan2(dy, dx);
+                const diff = Math.abs(angNorm(angToAlien - s.angle));
+                const tol = 0.4 + (bigR > 0 ? Math.atan2(bigR, Math.max(dist, 0.01)) : 0);
+                if (diff < tol) {
+                  damageAlien(a, flameDmg);
+                  hitAny = true;
                 }
               }
-              if(hitAny)s.flameDmgCool=0.4;
+              // dark heart shots
+              for (let si = dhShots.length - 1; si >= 0; si--) {
+                const sh = dhShots[si];
+                const dx = sh.x - cx, dy = sh.y - cy;
+                if (Math.hypot(dx, dy) > range) continue;
+                if (Math.abs(angNorm(Math.atan2(dy, dx) - s.angle)) < 0.4) {
+                  sh.hp -= flameDmg;
+                  hitAny = true;
+                  if (sh.hp <= 0) {
+                    burst(cellX(sh.x), cellY(sh.y), '#5c0000', 1.2);
+                    sh.el.remove(); dhShots.splice(si, 1);
+                  }
+                }
+              }
+              // tank cannonballs
+              for (let ci = tankCannonballs.length - 1; ci >= 0; ci--) {
+                const cb = tankCannonballs[ci];
+                const dx = cb.x - cx, dy = cb.y - cy;
+                if (Math.hypot(dx, dy) > range) continue;
+                if (Math.abs(angNorm(Math.atan2(dy, dx) - s.angle)) < 0.4) {
+                  cb.hp -= flameDmg;
+                  hitAny = true;
+                  if (cb.hp <= 0) {
+                    burst(cellX(cb.x), cellY(cb.y), '#ff8c42', 1.5);
+                    cb.el.remove(); tankCannonballs.splice(ci, 1);
+                  }
+                }
+              }
+              if (hitAny) s.flameDmgCool = 0.4;
             }
           }
 
@@ -2418,7 +2963,8 @@ function updateBullets(dt){
 
     for(const a of aliens){
       if(a.state==='dying')continue;
-      const hitR=a.alienType==='boss'?BOSS_RADIUS:CFG.ALIEN_HIT_RADIUS;
+      const hitR = (a.alienType === 'boss' || a.alienType === 'tank' || a.alienType === 'darkboss') ? BOSS_RADIUS
+                 : (a.alienType === 'darkheart') ? DARKHEART_RADIUS : CFG.ALIEN_HIT_RADIUS;
       const hitR2=hitR*hitR;
       let hit=false;
       if(b.type==='SNIPER'){
@@ -2459,10 +3005,11 @@ function updateAttack(dt,t){
   updateAliens(dt,t);
   updateBullets(dt);
   updateEBullets(dt);
+  updateDarkHeartShots(dt);
   updateTankCannonballs(dt);
   updateProjectiles(dt);
   updateGreenHearts(dt);
-  if(G.spawned>=G.total&&aliens.length===0&&!G.gates.length&&projectiles.length===0&&greenHearts.length===0){
+  if(G.spawned>=G.total&&aliens.length===0&&!G.gates.length&&projectiles.length===0&&greenHearts.length===0&&dhShots.length===0){
     phase='inter';
     G.timer=0.8;
     selection=null;
@@ -2559,7 +3106,13 @@ function updateTooltip(){
   const key=data.c.x+','+data.c.y+','+Math.round(data.hp);
   if(key!==tipKey){tipKey=key;choiceTooltipKey='';tooltipG.textContent='';const label=`${Math.max(0,Math.round(data.hp/data.max*100))}%`;const txt=buildText(label,1.05,2.2,'#111');const pw=txt.w+22,ph=40,px=cellX(data.c.x)+CELL/2-pw/2;let py=cellY(data.c.y)-ph-8;if(py<4)py=cellY(data.c.y)+CELL+8;el('rect',{x:px,y:py,width:pw,height:ph,rx:6,fill:'#fff',stroke:'#111','stroke-width':1.5},tooltipG);txt.g.setAttribute('transform',`translate(${px+11} ${py+7})`);tooltipG.appendChild(txt.g);el('rect',{x:px+11,y:py+26,width:pw-22,height:6,fill:'none',stroke:'#111','stroke-width':1.2},tooltipG);el('rect',{x:px+11,y:py+26,width:(pw-22)*clamp01(data.hp/data.max),height:6,fill:'#ff2140'},tooltipG);tooltipG.setAttribute('opacity',1);hoverRect.setAttribute('x',cellX(data.c.x)+1.5);hoverRect.setAttribute('y',cellY(data.c.y)+1.5);hoverRect.setAttribute('width',CELL-3);hoverRect.setAttribute('height',CELL-3);hoverG.setAttribute('opacity',1);}
 }
-function startWave(n){G.wave=n;phase='banner';const isBoss=(n%5===0);showBanner(isBoss?('WAVE '+n+' : BOSS'):'WAVE '+n,startPlacement);SFX.play(isBoss?'bossChime':'waveChime');}
+function startWave(n){
+  G.wave=n;phase='banner';
+  const isBoss=(n%5===0);
+  const bannerStr=(n===20)?'WAVE 20 : FINAL BOSS':(isBoss?('WAVE '+n+' : BOSS'):'WAVE '+n);
+  showBanner(bannerStr,startPlacement);
+  SFX.play(isBoss?'bossChime':'waveChime');
+}
 function fullRestart(){
   for(const s of structures)s.el.remove();structures.length=0;turrets.length=0;
   for(const a of aliens)a.art.g.remove();aliens.length=0;
@@ -2583,6 +3136,7 @@ function fullRestart(){
   heartHp=CFG.HEART_HP;heartDead=false;heartShake=0;heartInvincible=false;cheatStartWave=1;
   heartshots=CFG.HEARTSHOT_START;gameStarted=false;drawHeartshotsHUD();
   boss=null;heartSelectCool=0;choiceRot=0;bossesDefeated=0;screenShake=0;placementsPerWave=3;turretAdjacencyRemoved=false;winT=0;for(const c of tankCannonballs)c.el.remove();tankCannonballs.length=0;
+  for(const s of dhShots)s.el.remove();dhShots.length=0;
   turretLevels={FLAME:1,FREEZE:1,SNIPER:1,HOMING:1,MINE:1};
   heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
   heartG.setAttribute('opacity',0);
@@ -2600,61 +3154,63 @@ function fullRestart(){
 }
 svg.addEventListener('pointermove',e=>{const p=evtDesign(e);mouse.x=p.x;mouse.y=p.y;mouse.cell=pixelToCell(mouse.x,mouse.y);updateHSGhost();if(phase==='attack'&&selection&&selection.kind==='heart'&&heartshots>=1){svg.style.cursor=hsAnchorCell(mouse.x,mouse.y)?'crosshair':'default';}});
 svg.addEventListener('pointerdown',e=>{
-  SFX.init();
-  if(heartDead)return;if(e.button!==0)return;const p=evtDesign(e);mouse.x=p.x;mouse.y=p.y;mouse.cell=pixelToCell(mouse.x,mouse.y);if(phase==='attack'&&selection&&selection.kind==='heart'&&heartshots>=1){const ha=hsAnchorCell(mouse.x,mouse.y);if(ha){launchHeartshot(ha.x,ha.y);return;}selection=null;return;}if(phase==='place'){
-  if(G.choices.length>0&&choicesG._op>0){
-    for(let i=0;i<G.choices.length;i++){const c=G.choices[i];if(mouse.x>=c.x0&&mouse.x<=c.x1&&Math.abs(mouse.y-CHOICE.y)<=c.half){
-      if(c.isRotate){rotateChoicePreviews(1);if(G.piece)rotatePiece(1);return;}
-      selectChoice(i);return;
-    }}
-  }
-}if(phase==='place'||phase==='attack'||phase==='inter'||phase==='preAttack'){const cell=pixelToCell(mouse.x,mouse.y);if(!cell){selection=null;return;}const s=grid[cell.y][cell.x];const onHeart=cell.x===HEART.x&&cell.y===HEART.y;if(s&&s.type==='TURRET')selection={kind:'turret',ref:s};else if(onHeart){selection=heartSelectCool<=0?{kind:'heart'}:null;}else selection=null;}});
+    SFX.init();
+    if(heartDead)return;if(e.button!==0)return;const p=evtDesign(e);mouse.x=p.x;mouse.y=p.y;mouse.cell=pixelToCell(mouse.x,mouse.y);if(phase==='attack'&&selection&&selection.kind==='heart'&&heartshots>=1){const ha=hsAnchorCell(mouse.x,mouse.y);if(ha){launchHeartshot(ha.x,ha.y);return;}selection=null;return;}if(phase==='place'){
+      if(G.choices.length>0&&choicesG._op>0){
+        for(let i=0;i<G.choices.length;i++){const c=G.choices[i];if(mouse.x>=c.x0&&mouse.x<=c.x1&&Math.abs(mouse.y-CHOICE.y)<=c.half){
+            if(c.isRotate){rotateChoicePreviews(1);if(G.piece)rotatePiece(1);return;}
+            selectChoice(i);return;
+          }}
+      }
+    }if(phase==='place'||phase==='attack'||phase==='inter'||phase==='preAttack'){const cell=pixelToCell(mouse.x,mouse.y);if(!cell){selection=null;return;}const s=grid[cell.y][cell.x];const onHeart=cell.x===HEART.x&&cell.y===HEART.y;if(s&&s.type==='TURRET')selection={kind:'turret',ref:s};else if(onHeart){selection=heartSelectCool<=0?{kind:'heart'}:null;}else selection=null;}});
 window.addEventListener('pointerup', e => {
-  const p = evtDesign(e);
-  mouse.x = p.x;
-  mouse.y = p.y;
-  mouse.cell = pixelToCell(mouse.x, mouse.y);
-  
-  if (phase === 'place' && G.piece && G.pause <= 0) {
-    if (e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight) {
-      G.piece = null;
-      hideGhost();
-      return;
-    }
-    let overChoice = false;
-    if (G.choices.length > 0 && choicesG._op > 0) {
-      for (let i = 0; i < G.choices.length; i++) {
-        const c = G.choices[i];
-        if (mouse.x >= c.x0 && mouse.x <= c.x1 && Math.abs(mouse.y - CHOICE.y) <= c.half) {
-          overChoice = true; break;
+    const p = evtDesign(e);
+    mouse.x = p.x;
+    mouse.y = p.y;
+    mouse.cell = pixelToCell(mouse.x, mouse.y);
+
+    if (phase === 'place' && G.piece && G.pause <= 0) {
+      if (e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight) {
+        G.piece = null;
+        hideGhost();
+        return;
+      }
+      let overChoice = false;
+      if (G.choices.length > 0 && choicesG._op > 0) {
+        for (let i = 0; i < G.choices.length; i++) {
+          const c = G.choices[i];
+          if (mouse.x >= c.x0 && mouse.x <= c.x1 && Math.abs(mouse.y - CHOICE.y) <= c.half) {
+            overChoice = true; break;
+          }
         }
       }
+      if (!overChoice) {
+        commitPiece();
+      }
     }
-    if (!overChoice) {
-      commitPiece();
-    }
-  }
-});
+  });
 addEventListener('keydown',e=>{
-  if (e.key === 'C' && e.shiftKey && phase==='intro' && !cheatMode) {
-    cheatMode=true;
-    cheatStartWave=10;
-    heartInvincible=true;
-    createToastAt(['CHEAT MODE: START WAVE 10'],D/2,D/2,1.0);
-  }
-  if((e.key==='c'||e.key==='C')&&phase==='intro'&&!cheatMode){
-    cheatMode=true;
-    createToastAt(['CHEAT MODE'],D/2,D/2,1.0);
-  }
-  if(e.key==='Escape'){selection=null;G.piece=null;hideGhost();return;}if(heartDead)return;if(phase!=='place'||!G.piece)return;if(e.key==='ArrowLeft'||e.key==='ArrowUp'){rotatePiece(-1);e.preventDefault();}if(e.key==='ArrowRight'||e.key==='ArrowDown'){rotatePiece(1);e.preventDefault();}});
-addEventListener('wheel',e=>{if(heartDead)return;if(phase!=='place'||!G.piece)return;rotatePiece(e.deltaY>0?1:-1);e.preventDefault();},{passive:false});
+    if (e.key === 'C' && e.shiftKey && phase==='intro' && !cheatMode) {
+      cheatMode=true;
+      cheatStartWave=20;
+      heartInvincible=true;
+      createToastAt(['CHEAT MODE: START WAVE '+cheatStartWave],D/2,D/2,1.0);
+    }
+    if((e.key==='c'||e.key==='C')&&phase==='intro'&&!cheatMode){
+      cheatMode=true;
+      createToastAt(['CHEAT MODE'],D/2,D/2,1.0);
+    }
+    if(e.key==='Escape'){selection=null;G.piece=null;hideGhost();return;}if(heartDead)return;if(phase!=='place')return;if(e.key==='ArrowLeft'||e.key==='ArrowUp'){rotateChoicePreviews(-1);if(G.piece)rotatePiece(-1);e.preventDefault();}if(e.key==='ArrowRight'||e.key==='ArrowDown'){rotateChoicePreviews(1);if(G.piece)rotatePiece(1);e.preventDefault();}});
+
+addEventListener('wheel',e=>{if(heartDead)return;if(phase!=='place')return;const dir=e.deltaY>0?1:-1;rotateChoicePreviews(dir);if(G.piece)rotatePiece(dir);e.preventDefault();},{passive:false});
+
 btn.addEventListener('click',()=>{
-  SFX.init();
-  if(phase!=='intro')return;if(performance.now()/1000-t0<4.1)return;gameStarted=true;
-  if(cheatMode){
-    turretPool={BASIC:4,FLAME:4,FREEZE:4,SNIPER:4,HOMING:4,MINE:4};
-  }
-  drawHeartshotsHUD();phase='exit';tClick=performance.now()/1000-t0;snap={hx:HEART_TITLE.x,hy:HEART_TITLE.y,s:HEART_TITLE.big};letterMeta.forEach((m,idx)=>{m.exitDelay=idx*0.028;m.exitDur=0.5+((idx*13)%5)*0.04;m.yTo=-(LH*TL+60+m.i*10);});spawnUpgradeContainers();});
+    SFX.init();
+    if(phase!=='intro')return;if(performance.now()/1000-t0<4.1)return;gameStarted=true;
+    if(cheatMode){
+      turretPool={BASIC:4,FLAME:4,FREEZE:4,SNIPER:4,HOMING:4,MINE:4};
+    }
+    drawHeartshotsHUD();phase='exit';tClick=performance.now()/1000-t0;snap={hx:HEART_TITLE.x,hy:HEART_TITLE.y,s:HEART_TITLE.big};letterMeta.forEach((m,idx)=>{m.exitDelay=idx*0.028;m.exitDur=0.5+((idx*13)%5)*0.04;m.yTo=-(LH*TL+60+m.i*10);});spawnUpgradeContainers();});
 btn.addEventListener('pointerenter',()=>{btnHover=true;setBtnStyle();});
 btn.addEventListener('pointerleave',()=>{btnHover=false;btnPress=false;setBtnStyle();});
 btn.addEventListener('pointerdown',()=>{btnPress=true;});btn.addEventListener('pointerup',()=>{btnPress=false;});
@@ -2672,7 +3228,7 @@ function drawBtnIntro(t,beat){const bop=clamp01((t-4.1)/0.7),e=easeOutCubic(bop)
 function frame(nowMs){
   const t=nowMs/1000-t0,dt=clamp(t-lastT,0,0.05);lastT=t;const beat=hb(t);
   if(heartSelectCool>0)heartSelectCool-=dt;
-  
+
   const currentBeatIdx = Math.floor(t / BEAT);
   if ((phase === 'intro' || phase === 'exit') && beat > 0.8) {
     if (currentBeatIdx !== lastBeatIdx) {
@@ -2729,7 +3285,7 @@ function frame(nowMs){
     else if(phase==='place'){updatePlacement(dt);updateProjectiles(dt);}
     else if(phase==='preAttack'){updatePlacement(dt);updateProjectiles(dt);G.timer-=dt;if(G.timer<=0)startAttack();}
     else if(phase==='attack')updateAttack(dt,t);
-    else if(phase==='inter'){updateBullets(dt);updateEBullets(dt);updateProjectiles(dt);updateGreenHearts(dt);G.timer-=dt;if(G.timer<=0)startWave(G.wave+1);}
+    else if(phase==='inter'){updateBullets(dt);updateEBullets(dt);updateDarkHeartShots(dt);updateProjectiles(dt);updateGreenHearts(dt);G.timer-=dt;if(G.timer<=0)startWave(G.wave+1);}
     if(phase==='place'||phase==='preAttack'||phase==='attack'||phase==='inter'){updateTurrets(dt);updateSelRing(beat);}
   }
   updateFx(dt);updateToasts(dt);updateDmgNumbers(dt);updateTooltip();updateInstructions(dt);
