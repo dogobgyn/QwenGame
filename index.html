@@ -72,7 +72,7 @@ const CFG={
   JUMPER_SPEED_MULT:0.7,
   JUMPER_SHOT_RATE:1.6,JUMPER_SHOT_RANGE:3,JUMPER_SHOT_SPEED:6,
 };
-const ALIEN_HP = {normal:CFG.NORMAL_HP, intermediate:3, jumper:1, strong:8, flyer:1, darkflyer:3, boss:30, tankboss:50, darkboss:60, darkhopper:3, darkheart:80};
+const ALIEN_HP = {normal:CFG.NORMAL_HP, intermediate:3, jumper:1, strong:6, flyer:1, darkflyer:3, boss:30, tankboss:40, darkboss:50, darkhopper:3, darkheart:1};
 const BOSS_RADIUS = 1.25;
 const DARKHEART_RADIUS = 1.4;        // NEW: hit radius of the 3x3 heart boss (in cells)
 const DARKHEART_TURRET_HP = 10;      // NEW: HP of the possessed dark turret form
@@ -567,7 +567,7 @@ const TANK_WAYPOINTS = [
   {x:7.5, y:8.5}, {x:8.5, y:8.5}
 ];
 function spawnTankBoss(cell) {
-  const bossHp = cheatMode ? 10 : 50;
+  const bossHp = ALIEN_HP.tankboss;
   const cx = (cell && cell.x !== undefined ? cell.x : 1) + 0.5;
   const cy = (cell && cell.y !== undefined ? cell.y : 1) + 0.5;
   const a = {
@@ -695,8 +695,8 @@ function updateTankCannonballs(dt) {
     const c = tankCannonballs[i];
     if (c.frozen > 0) c.frozen -= dt;
     const fm = c.frozen > 0 ? 0.34 : 1;
-    c.x += c.dx * 3 * dt * fm;
-    c.y += c.dy * 3 * dt * fm;
+    c.x += c.dx * 1.5 * dt * fm;
+    c.y += c.dy * 1.5 * dt * fm;
     c.el.setAttribute('cx', cellX(c.x));
     c.el.setAttribute('cy', cellY(c.y));
     c.el.setAttribute('fill', c.frozen > 0 ? '#4fc3f7' : '#222');
@@ -771,7 +771,7 @@ function makeDarkHeartArt(g) {
 
 function spawnDarkHeartBoss(cell) {
   const cx = cell.x + 0.5, cy = cell.y + 0.5;
-  const bossHp = cheatMode ? 10 : ALIEN_HP.darkheart;
+  const bossHp = ALIEN_HP.darkheart;
   aliens.push({
     x: cx, y: cy,
     cell: {x: clamp(Math.floor(cx), 0, GRID_N - 1), y: clamp(Math.floor(cy), 0, GRID_N - 1)},
@@ -1005,6 +1005,7 @@ function updateDarkHeartShots(dt) {
 function triggerWinScreen() { phase = 'win'; winT = 0; hideTooltip(); }
 function showWinScreen(score) {
   goScreen.setAttribute('opacity', 1); goTitle.textContent = ''; goScore.textContent = ''; goBtn.textContent = ''; goLetters = [];
+  goTitle.setAttribute('stroke', '#111');
   const titleScale = TL * view.k, scoreScale = TL * view.k, btnScale = BTN_SCALE * view.k;
   const sw = W, sh = H; const goStr = 'YOU WIN'; const totalUnits = textUnits(goStr); const totalPx = totalUnits * titleScale;
   const startX = (sw - totalPx) / 2, topY = sh * 0.3; let cur = 0, i = 0;
@@ -1013,7 +1014,7 @@ function showWinScreen(score) {
     goLetters.push({el: gg, cx: startX + (cur + 5) * titleScale, cy: topY + 7 * titleScale, i, delay: i * 0.06, dur: 0.7, titleScale, fromY: -100});
     cur += ADV; i++;
   }
-  const stxt = 'FINAL SCORE ' + score; const st = buildText(stxt, scoreScale, 2, '#ff2140');
+  const stxt = 'FINAL SCORE ' + score; const st = buildText(stxt, scoreScale, 2, '#111');
   st.g.setAttribute('transform', `translate(${(sw - st.w) / 2} ${sh * 0.42})`); goScore.appendChild(st.g); goScore.setAttribute('opacity', 1);
   const bbw = 66 * btnScale + 44, bbh = 14 * btnScale + 26, bbx = sw / 2, bby = sh * 0.6;
   goBtnRect = el('rect', {x: bbx - bbw / 2, y: bby - bbh / 2, width: bbw, height: bbh, rx: 12, stroke: '#ff2140', 'stroke-width': 2.5, fill: '#1a0005'}, goBtn);
@@ -1243,6 +1244,7 @@ function buildGameOverScreen(){goTitle.textContent='';goScore.textContent='';goB
 function showGameOver(score){
   goScreen.setAttribute('opacity',1);
   goTitle.textContent='';goScore.textContent='';goBtn.textContent='';goLetters=[];
+  goTitle.setAttribute('stroke','#ff2140');
   const titleScale=TL*view.k,scoreScale=TL*view.k,btnScale=BTN_SCALE*view.k;
   const sw=W,sh=H;
   const goStr='GAME OVER';const totalUnits=textUnits(goStr);const totalPx=totalUnits*titleScale;
@@ -1745,12 +1747,13 @@ function pickEdgeCells(n){const opts=[];for(let i=0;i<GRID_N;i++){opts.push({x:i
 
 function getAlienTypeForWave(wave,allowRare){
   if(allowRare===undefined)allowRare=true;
+  const postBoss=(wave-1)%5===0;   // waves 6, 11, 16: rebuilding waves after a boss
   const types=['normal'];
   const weights=[3];
   if(wave>=3){types.push('intermediate');weights.push(2);}
-  if(wave>=2&&allowRare){types.push(wave>=10?'darkhopper':'jumper');weights.push(2);}
-  if(wave>=4&&allowRare){types.push(wave>=12?'darkflyer':'flyer');weights.push(1);}
-  if(wave>=6&&allowRare){types.push('strong');weights.push(1);}
+  if(wave>=2&&allowRare){types.push(wave>=10&&!postBoss?'darkhopper':'jumper');weights.push(2);}
+  if(wave>=4&&allowRare){types.push(wave>=15&&!postBoss?'darkflyer':'flyer');weights.push(1);}
+  if(wave>=6&&allowRare&&!postBoss){types.push('strong');weights.push(1);}
   const total=weights.reduce((a,b)=>a+b,0);
   let r=Math.random()*total;
   for(let i=0;i<types.length;i++){
@@ -1769,12 +1772,12 @@ function startAttack(){
   let nextOpen=0.9;
   for(let p=0;p<numPortals;p++){
     const openTime=nextOpen;
-    nextOpen+=2+Math.random();
+    nextOpen+=2.5+Math.random();
     const spawnQueue=[];
     let rareUsed=false;
     for(let k=0;k<CFG.ALIENS_PER_PORTAL;k++){
       let type=getAlienTypeForWave(G.wave,!rareUsed);
-      if(type==='jumper'||type==='flyer'||type==='strong')rareUsed=true;
+      if(type==='jumper'||type==='flyer'||type==='strong'||type==='darkhopper'||type==='darkflyer')rareUsed=true;
       spawnQueue.push({time:openTime+k*CFG.SPAWN_GAP_BASE,type});
     }
     G.gates.push({cell:cells[p%cells.length],el:makeGateArt(1),openTime,opened:false,spawnQueue,closing:false,closeT:0,size:1,boss:false,bossSpawned:false});
@@ -1791,6 +1794,7 @@ function startAttack(){
   }else{
     G.total=numPortals*CFG.ALIENS_PER_PORTAL;
   }
+  if(isBossWave)G.bossPortalTimer=4;   // NEW: first extra portal in 4s
   showInstructions();
 }
 function makeGateArt(size){
@@ -1841,6 +1845,21 @@ function updateGates(dt,t){
     if(gt.el.children[1])gt.el.children[1].setAttribute('transform',`rotate(${-t*140}) scale(${sc})`);
     if(gt.closing&&gt.closeT>=0.45){gt.el.remove();G.gates.splice(gi,1);}
   }
+}
+function spawnBossWavePortal(){
+  const cells=pickEdgeCells(1);
+  if(!cells.length)return;
+  const cell=cells[0];
+  const openTime=attackElapsed+0.3;
+  const spawnQueue=[];
+  let rareUsed=false;
+  for(let k=0;k<CFG.ALIENS_PER_PORTAL;k++){
+    let type=getAlienTypeForWave(G.wave,!rareUsed);
+    if(type==='jumper'||type==='flyer'||type==='strong'||type==='darkhopper'||type==='darkflyer')rareUsed=true;
+    spawnQueue.push({time:openTime+k*CFG.SPAWN_GAP_BASE,type});
+  }
+  G.gates.push({cell,el:makeGateArt(1),openTime,opened:false,spawnQueue,closing:false,closeT:0,size:1,boss:false,bossSpawned:false});
+  G.total+=CFG.ALIENS_PER_PORTAL;
 }
 
 function makeNormalArt(g){
@@ -2218,7 +2237,7 @@ function damageAlien(a, amt) {
   }
   a.hp-=amt;
   a.flash=0.15;
-  if(a.alienType==='boss'||a.alienType==='tank')drawBossMeter();
+  if(a.alienType==='boss'||a.alienType==='tank'||a.alienType==='darkboss')drawBossMeter();
   if(a.hp<=0){
     killAlien(a);
     return true;
@@ -2258,7 +2277,7 @@ function spawnBoss(cell){
   const dx=hx-cx,dy=hy-cy;
   const d=Math.hypot(dx,dy)||1;
   const x=cx+dx/d*1.0,y=cy+dy/d*1.0;
-  const bossHp=cheatMode?10:ALIEN_HP.boss;
+  const bossHp=ALIEN_HP.boss;
   aliens.push({
       x:x,y:y,
       cell:{x:clamp(Math.floor(x),0,GRID_N-1),y:clamp(Math.floor(y),0,GRID_N-1)},
@@ -2311,7 +2330,7 @@ function spawnDarkBoss(cell){
   const dx=hx-cx,dy=hy-cy;
   const d=Math.hypot(dx,dy)||1;
   const x=cx+dx/d*1.0,y=cy+dy/d*1.0;
-  const bossHp=cheatMode?10:ALIEN_HP.darkboss;
+  const bossHp=ALIEN_HP.darkboss;
   aliens.push({
       x:x,y:y,
       cell:{x:clamp(Math.floor(x),0,GRID_N-1),y:clamp(Math.floor(y),0,GRID_N-1)},
@@ -2375,10 +2394,10 @@ function updateGreenHearts(dt){
         heartShake=0.2;
         burst(HEART_CELL_PX.x,HEART_CELL_PX.y,'#39d353',2.0);
         shockRing(HEART_CELL_PX.x,HEART_CELL_PX.y,2.5*CELL,'#39d353',0.5);
-        if (bossesDefeated === 1) showToast(['UPGRADE: SECOND PIECE CHOICE']);
+        if (G.wave >= 20 || bossesDefeated >= 4) triggerWinScreen();
+        else if (bossesDefeated === 1) showToast(['UPGRADE: SECOND PIECE CHOICE']);
         else if (bossesDefeated === 2) { placementsPerWave = 4; showToast(['UPGRADE: 4 PIECES PER WAVE']); }
         else if (bossesDefeated === 3) { turretAdjacencyRemoved = true; showToast(['UPGRADE: TURRETS BUILD ADJACENT']); }
-        else if (bossesDefeated === 4) triggerWinScreen();
       }
     }
   }
@@ -3002,6 +3021,13 @@ function updateBullets(dt){
 function updateAttack(dt,t){
   attackElapsed+=dt;
   updateGates(dt,t);
+  if(G.wave%5===0&&boss&&boss.state!=='dying'){
+    G.bossPortalTimer-=dt;
+    if(G.bossPortalTimer<=0){
+      G.bossPortalTimer=6;
+      spawnBossWavePortal();
+    }
+  }
   updateAliens(dt,t);
   updateBullets(dt);
   updateEBullets(dt);
@@ -3009,7 +3035,7 @@ function updateAttack(dt,t){
   updateTankCannonballs(dt);
   updateProjectiles(dt);
   updateGreenHearts(dt);
-  if(G.spawned>=G.total&&aliens.length===0&&!G.gates.length&&projectiles.length===0&&greenHearts.length===0&&dhShots.length===0){
+  if(phase==='attack'&&G.spawned>=G.total&&aliens.length===0&&!G.gates.length&&projectiles.length===0&&greenHearts.length===0&&dhShots.length===0){
     phase='inter';
     G.timer=0.8;
     selection=null;
@@ -3037,11 +3063,17 @@ function updateTooltip(){
       const tIdx=c.types?c.types.indexOf('TURRET'):-1;
       if(tIdx>=0 && c.turretTypes && c.turretTypes[tIdx]){
         const tt=c.turretTypes[tIdx];
-        const newKey='choice_'+tt;
+        const lvl=turretLevels[tt]||1;
+        const newKey='choice_'+tt+'_'+lvl;
         if(newKey!==choiceTooltipKey){
           choiceTooltipKey=newKey;tipKey='';
           tooltipG.textContent='';
-          const lines=[tt,...wrapText((TURRET_INFO[tt]||'').toUpperCase(),32)];
+          let lines=[tt,...wrapText((TURRET_INFO[tt]||'').toUpperCase(),32)];
+          if(lvl>=2){
+            const desc=upgradeDescription(tt,lvl);
+            lines[0]=tt+' LV '+lvl;
+            if(desc)lines.splice(1,0,...wrapText(desc.toUpperCase(),32));
+          }
           const scale=1.0,lineH=LH*scale+4,padX=11,padY=8;
           let maxW=0;
           const built=lines.map(ln=>{const t=buildText(ln,scale,2,'#111');maxW=Math.max(maxW,t.w);return t;});
@@ -3122,6 +3154,7 @@ function fullRestart(){
   for(const h of greenHearts)h.el.remove();greenHearts.length=0;
   for(const g of G.gates)g.el.remove();
   fxG.textContent='';fx.length=0;darkG.textContent='';projG.textContent='';
+  for(const gg of [structG,gateG,alienG,bulletG,darkG,projG,fxG,instrG,hudG,bossHudG,toastG])gg.setAttribute('opacity',1);
   hsGhostG.textContent='';hsGhostG.setAttribute('opacity',0);
   heartBreakG.textContent='';heartBreakG.setAttribute('opacity',0);breakActive=false;
   toastG.textContent='';toasts.length=0;dmgNums.length=0;
@@ -3198,6 +3231,7 @@ addEventListener('keydown',e=>{
     }
     if((e.key==='c'||e.key==='C')&&phase==='intro'&&!cheatMode){
       cheatMode=true;
+      heartInvincible=true;
       createToastAt(['CHEAT MODE'],D/2,D/2,1.0);
     }
     if(e.key==='Escape'){selection=null;G.piece=null;hideGhost();return;}if(heartDead)return;if(phase!=='place')return;if(e.key==='ArrowLeft'||e.key==='ArrowUp'){rotateChoicePreviews(-1);if(G.piece)rotatePiece(-1);e.preventDefault();}if(e.key==='ArrowRight'||e.key==='ArrowDown'){rotateChoicePreviews(1);if(G.piece)rotatePiece(1);e.preventDefault();}});
@@ -3257,11 +3291,16 @@ function frame(nowMs){
   if(phase==='intro'){const gGrow=easeInOutCubic(clamp01((t-0.55)/3.75));setBg(255*gGrow);heartOp=clamp01((t-0.25)/1.0);hx=HEART_TITLE.x;hy=HEART_TITLE.y;hs=lerp(HEART_TITLE.small,HEART_TITLE.big,gGrow)*(1+PULSE_AMP*beat);drawTitleIntro(t);drawBtnIntro(t,beat);}
   else if(phase==='exit'){setBg(255);const qRaw=(t-tClick)/1.35,q=easeInOutCubic(clamp01(qRaw));gOp=0.15*easeOutCubic(clamp01((t-tClick)/0.9));hx=lerp(snap.hx,HEART_CELL_PX.x,q);hy=lerp(snap.hy,HEART_CELL_PX.y,q);hs=lerp(snap.s,HEART_CELL_SCALE,q)*(1+PULSE_AMP*beat);heartOp=1;const gone=drawTitleExit(t),bop=clamp01(1-(t-tClick)/0.3);btn.setAttribute('opacity',bop);if(bop<=0)btn.style.display='none';if(qRaw>=1&&gone){phase='waiting';titleG.style.display='none';G.timer=0.3;}}
   else if(phase==='win'){
-    setBg(255);gOp=0.15;winT+=dt;
+    setBg(255);winT+=dt;
     const p=easeInOutCubic(clamp01(winT/2.0));
+    gOp=0.15*(1-p);
     hs=lerp(HEART_CELL_SCALE,HEART_TITLE.big,p);hx=lerp(HEART_CELL_PX.x,HEART_TITLE.x,p);hy=lerp(HEART_CELL_PX.y,HEART_TITLE.y,p);
     heartOp=1;heartP.setAttribute('fill','#ff2140');heartP.setAttribute('stroke','#d40f33');
     haloP.setAttribute('opacity',(0.10+0.09*beat).toFixed(3));
+    const winFade=String(1-p);
+    for(const gg of [structG,gateG,alienG,bulletG,darkG,projG,fxG,instrG,hudG,bossHudG,toastG]){
+      gg.setAttribute('opacity',winFade);
+    }
     if(winT>=2.0&&goPhase==='hidden')showWinScreen(aliensKilled);
     updateGameOver(dt);
   }
